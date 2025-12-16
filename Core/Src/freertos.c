@@ -110,7 +110,7 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of demo_task */
-  osThreadDef(demo_task, start_demo_task, osPriorityIdle, 0, 128);
+  osThreadDef(demo_task, start_demo_task, osPriorityIdle, 0, 256);
   demo_taskHandle = osThreadCreate(osThread(demo_task), NULL);
 
   /* definition and creation of mission_planer_ */

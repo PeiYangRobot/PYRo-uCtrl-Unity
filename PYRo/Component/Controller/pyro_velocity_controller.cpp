@@ -2,7 +2,7 @@
 
 namespace pyro
 {
-    velocity_controller_t::velocity_controller_t(motor_base_t* motor, pid_ctrl_t* spd_pid)
+    velocity_controller_t::velocity_controller_t(motor_base_t* motor, pid_t* spd_pid)
         : closed_controller_t(motor), _spd_pid(spd_pid)
     {
         _target_spd = 0.0f;

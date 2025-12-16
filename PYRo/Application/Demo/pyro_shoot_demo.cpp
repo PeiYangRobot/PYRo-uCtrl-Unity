@@ -3,23 +3,15 @@
 #include "cmsis_os.h"
 #include "fdcan.h"
 #include "pyro_can_drv.h"
-#include "pyro_shoot_base.h"
+#include "pyro_shoot_17mm_control.h"
+
+#define FRIC_RADIUS 0.03f
+#define STEP (pyro::PI/4)
 
 #ifdef __cplusplus
 
-pyro::rc_drv_t *dr16_drv;
 extern "C"
 {
-    pyro::can_drv_t *can1_drv;
-    pyro::can_drv_t *can2_drv;
-    pyro::can_drv_t *can3_drv;
-
-    std::array<uint8_t, 8> can1_data;
-    std::array<uint8_t, 8> can2_data;
-
-    std::vector<uint8_t> can1_data_vec;
-    std::vector<uint8_t> can2_data_vec;
-
     pyro::dji_m3508_motor_drv_t *m3508_drv_1;
     pyro::dji_m3508_motor_drv_t *m3508_drv_2;
 
@@ -30,87 +22,79 @@ extern "C"
 
     pyro::trigger_drv_t *trigger_drv;
 
-    pyro::pid_ctrl_t *speed_pid_1;
-    pyro::pid_ctrl_t *speed_pid_2;
-    pyro::pid_ctrl_t *speed_pid_3;
-    pyro::pid_ctrl_t *positon_pid;
-    
-    // pyro::shoot_drv_t *shoot_drv;
+    pyro::pid_ctrl_t *fric1_speed_pid;
+    pyro::pid_ctrl_t *fric2_speed_pid;
+    pyro::pid_ctrl_t *trigger_speed_pid;
+    pyro::pid_ctrl_t *trigger_positon_pid;
+
+    pyro::shoot_17mm_control_t *shoot_drv;
 
     void pyro_shoot_demo(void *arg)
     { 
-    //             pyro::get_uart5().enable_rx_dma();
-    //     dr16_drv = new pyro::dr16_drv_t(&pyro::get_uart5());
-    //     dr16_drv->init();
-    //     dr16_drv->enable();
+        fric1_speed_pid = new pyro::pid_ctrl_t(12.0f, 0.0f, 0.0f);
+        fric2_speed_pid = new pyro::pid_ctrl_t(12.0f, 0.0f, 0.0f);
+        trigger_speed_pid = new pyro::pid_ctrl_t(6.0f, 80.0f, 0.0004f);
+        trigger_positon_pid = new pyro::pid_ctrl_t(7.0f, 0.0f, 0.0f);
 
-    //     pyro::can_hub_t::get_instance();
-    //     can1_drv = new pyro::can_drv_t(&hfdcan1);
-    //     can2_drv = new pyro::can_drv_t(&hfdcan2);
-    //     can3_drv = new pyro::can_drv_t(&hfdcan3);
+        trigger_speed_pid->set_integral_limits(0.01f);
+        trigger_positon_pid->set_integral_limits(1000.0f);
 
-    //     can1_drv->init();
-    //     can2_drv->init();
-    //     can3_drv->init();
-
-    //     can1_drv->start();
-    //     can2_drv->start();
-    //     can3_drv->start();
-
-    //     speed_pid_1 = new pyro::pid_ctrl_t(7.0f, 0.0f, 0.00f);
-    //     speed_pid_2 = new pyro::pid_ctrl_t(7.0f, 0.0f, 0.00f);
-    //     speed_pid_3 = new pyro::pid_ctrl_t(5.0f, 0.1f, 0.00f);
-
-    //     speed_pid_1->set_output_limits(15.0f);
-    //     speed_pid_2->set_output_limits(15.0f);
-    //     speed_pid_3->set_output_limits(15.0f);
-
-    //     positon_pid = new pyro::pid_ctrl_t(0.01f, 0.01f, 0.00f);
-
-    //     positon_pid->set_output_limits(15.0f);
-
-    //     m3508_drv_1 = new pyro::dji_m3508_motor_drv_t(
-    //         pyro::dji_motor_tx_frame_t::id_1, pyro::can_hub_t::can2);
-    //     m3508_drv_2 = new pyro::dji_m3508_motor_drv_t(
-    //         pyro::dji_motor_tx_frame_t::id_2, pyro::can_hub_t::can2);
-    //     m2006_drv = new pyro::dji_m2006_motor_drv_t(
-    //         pyro::dji_motor_tx_frame_t::id_3, pyro::can_hub_t::can2);
+        fric1_speed_pid->set_output_limits(20.0f);
+        fric2_speed_pid->set_output_limits(20.0f);
+        trigger_speed_pid->set_output_limits(60.0f);
+        trigger_positon_pid->set_output_limits(20.0f);
 
 
-    //     fric_drv_1 = new pyro::fric_drv_t(
-    //         m3508_drv_1, 
-    //         *speed_pid_1,
-    //         0.03f);
+        m3508_drv_1 = new pyro::dji_m3508_motor_drv_t(
+            pyro::dji_motor_tx_frame_t::id_1, pyro::can_hub_t::can2);
+        m3508_drv_2 = new pyro::dji_m3508_motor_drv_t(
+            pyro::dji_motor_tx_frame_t::id_2, pyro::can_hub_t::can2);
+        m2006_drv = new pyro::dji_m2006_motor_drv_t(
+            pyro::dji_motor_tx_frame_t::id_3, pyro::can_hub_t::can2);
 
-    //     fric_drv_2 = new pyro::fric_drv_t(
-    //         m3508_drv_2, 
-    //         *speed_pid_2,
-    //         0.03f);
+        fric_drv_1 = new pyro::fric_drv_t(
+            m3508_drv_1, 
+            *fric1_speed_pid,
+            FRIC_RADIUS,
+            pyro::fric_drv_t::CLOCKWISE);
 
-    //     trigger_drv = new pyro::trigger_drv_t(
-    //         m2006_drv,
-    //         *speed_pid_3,
-    //         *positon_pid);
+        fric_drv_2 = new pyro::fric_drv_t(
+            m3508_drv_2, 
+            *fric2_speed_pid,
+            FRIC_RADIUS,
+            pyro::fric_drv_t::COUNTERCLOCKWISE);
 
-    //     fric_drv_1->set_speed(15.0f);
-    //     fric_drv_2->set_speed(-15.0f);
-    //     trigger_drv->set_rotate(-10.0f);
+        trigger_drv = new pyro::trigger_drv_t(
+            m2006_drv,
+            *trigger_speed_pid,
+            *trigger_positon_pid,
+            STEP,
+            pyro::trigger_drv_t::DOWN);
 
-    //     trigger_drv->set_gear_ratio(36.0f);
+        fric_drv_1->set_dt(0.001f);
+        fric_drv_2->set_dt(0.001f);
 
-    //     shoot_drv = new pyro::shoot_drv_t(
-    //         fric_drv_1,
-    //         fric_drv_2,
-    //         trigger_drv,
-    //         dr16_drv);
+        trigger_drv->set_dt(0.001f);
+        trigger_drv->set_gear_ratio(36.0f);
 
-    //     while (true)
-    //     {
-    //         shoot_drv->update_feedback();
-    //         shoot_drv->shoot_control();
+        shoot_drv = new pyro::shoot_17mm_control_t(
+            trigger_drv,
+            fric_drv_1,
+            fric_drv_2
+            );
 
-    //         vTaskDelay(1);
-    //     }
+        shoot_drv->set_continuous_mode_delay(20);
+        shoot_drv->set_fric_speed(23.0f);
+        shoot_drv->set_trigger_rotate(10.0f);
+
+        while (true)
+        {
+            shoot_drv->update_feedback();
+            shoot_drv->set_control();
+            shoot_drv->control();
+
+            vTaskDelay(1);
+        }
     }
 
 

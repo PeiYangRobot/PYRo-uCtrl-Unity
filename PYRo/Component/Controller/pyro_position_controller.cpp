@@ -3,7 +3,7 @@
 namespace pyro
 {
 
-position_controller_t::position_controller_t(motor_base_t* motor, pid_ctrl_t* pos_pid, pid_ctrl_t* rot_pid)
+position_controller_t::position_controller_t(motor_base_t* motor, pid_t* pos_pid, pid_t* rot_pid)
     : closed_controller_t(motor), _pos_pid(pos_pid), _rot_pid(rot_pid)
 {
     _target_pos = 0.0f;

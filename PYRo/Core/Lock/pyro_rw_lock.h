@@ -7,7 +7,6 @@
 
 namespace pyro
 {
-
 /**
  * @brief 基于FreeRTOS的C++读写锁（写优先）
  *
@@ -19,6 +18,9 @@ namespace pyro
  */
 class rw_lock
 {
+    friend class write_scope_lock;
+    friend class read_scope_lock;
+
   public:
     rw_lock();
     ~rw_lock();
@@ -30,7 +32,7 @@ class rw_lock
     // ----------------------------------------------------------------
     // 阻塞式 (无限等待) API
     // ----------------------------------------------------------------
-
+    private:
     /**
      * @brief 请求读锁 (无限期等待)
      */
@@ -70,8 +72,6 @@ class rw_lock
      */
     bool write_lock(TickType_t timeout_ticks);
 
-
-  private:
     SemaphoreHandle_t _internal_mutex;  // 用于保护内部计数器的互斥锁
     SemaphoreHandle_t _read_gate;       // 读者“大门”信号量
     SemaphoreHandle_t _write_gate;      // 写者“大门”信号量
@@ -121,7 +121,7 @@ class read_scope_lock
      * @brief 检查锁是否成功获取
      * @return true 如果锁被持有, false 如果超时
      */
-    bool is_locked() const
+    [[nodiscard]] bool is_locked() const
     {
         return _is_locked;
     }
@@ -173,7 +173,7 @@ class write_scope_lock
      * @brief 检查锁是否成功获取
      * @return true 如果锁被持有, false 如果超时
      */
-    bool is_locked() const
+    [[nodiscard]] bool is_locked() const
     {
         return _is_locked;
     }

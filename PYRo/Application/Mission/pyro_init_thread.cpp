@@ -1,5 +1,6 @@
 #include "pyro_can_drv.h"
 #include "pyro_rc_hub.h"
+#include "pyro_dwt_drv.h"
 
 extern "C"
 {
@@ -9,6 +10,8 @@ extern "C"
 
     void pyro_init_thread(void *argument)
     {
+        pyro::dwt_drv_t::init(480); // Initialize DWT at 480 MHz
+
         pyro::uart_drv_t::get_instance(pyro::uart_drv_t::uart1)
             ->enable_rx_dma();
         pyro::uart_drv_t::get_instance(pyro::uart_drv_t::uart5)
@@ -18,8 +21,8 @@ extern "C"
         pyro::uart_drv_t::get_instance(pyro::uart_drv_t::uart10)
             ->enable_rx_dma();
 
-        pyro::rc_hub_t::get_instance(pyro::rc_hub_t::DR16)->init();
         pyro::rc_hub_t::get_instance(pyro::rc_hub_t::DR16)->enable();
+        pyro::rc_hub_t::get_instance(pyro::rc_hub_t::VT03)->enable();
 
         pyro::can_hub_t::get_instance();
         can1_drv = new pyro::can_drv_t(&hfdcan1);

@@ -70,6 +70,12 @@ uart_drv_t::~uart_drv_t()
     uart_map().erase(_huart);
 }
 
+/**
+ * @brief Accessor for the UART driver Singleton instance.
+ *
+ * This function uses the "Magic Static" (Meyers' Singleton) pattern
+ * to create and return a driver instance for a specific UART peripheral.
+ */
 uart_drv_t *uart_drv_t::get_instance(const which_uart uart)
 {
     switch (uart)
@@ -159,9 +165,8 @@ status_t uart_drv_t::enable_rx_dma()
     {
         return PYRO_ERROR;
     }
-    uint8_t ret;
-    ret = HAL_UARTEx_ReceiveToIdle_DMA(_huart, rx_buf[rx_buf_switch],
-                                       _rx_buf_size);
+    const uint8_t ret = HAL_UARTEx_ReceiveToIdle_DMA(
+        _huart, rx_buf[rx_buf_switch], _rx_buf_size);
     if (ret != HAL_OK)
     {
         state.rx_dma_enable = 0;
@@ -185,7 +190,7 @@ status_t uart_drv_t::enable_rx_dma()
 /**
  * @brief Aborts the ongoing DMA reception.
  */
-status_t uart_drv_t::disable_rx_dma()
+status_t uart_drv_t::disable_rx_dma() const
 {
     if (HAL_OK != HAL_UART_AbortReceive(_huart))
     {
@@ -200,8 +205,8 @@ status_t uart_drv_t::disable_rx_dma()
  *
  * Clears all pending error flags and restarts DMA reception.
  */
-status_t uart_drv_t::reset(uint32_t BaudRate, uint32_t WordLength,
-                           uint32_t StopBits, uint32_t Parity)
+status_t uart_drv_t::reset(const uint32_t BaudRate, const uint32_t WordLength,
+                           const uint32_t StopBits, const uint32_t Parity)
 {
     _huart->Init.BaudRate   = BaudRate;
     _huart->Init.WordLength = WordLength;
@@ -232,7 +237,7 @@ status_t uart_drv_t::reset(uint32_t BaudRate, uint32_t WordLength,
  * @brief Registers a custom C++ RX event callback with an owner ID.
  */
 void uart_drv_t::add_rx_event_callback(const rx_event_func &func,
-                                       uint32_t owner)
+                                       const uint32_t owner)
 {
     rx_event_callback_t callback;
     callback.owner = owner;
@@ -243,7 +248,7 @@ void uart_drv_t::add_rx_event_callback(const rx_event_func &func,
 /**
  * @brief Removes a custom C++ RX event callback based on the owner ID.
  */
-status_t uart_drv_t::remove_rx_event_callback(uint32_t owner)
+status_t uart_drv_t::remove_rx_event_callback(const uint32_t owner)
 {
     for (auto it = rx_event_callbacks.begin(); it != rx_event_callbacks.end();
          ++it)
@@ -262,7 +267,7 @@ status_t uart_drv_t::remove_rx_event_callback(uint32_t owner)
  * @brief Registers the HAL Rx Event Callback.
  */
 status_t uart_drv_t::register_event_callback(
-    const pUART_RxEventCallbackTypeDef pCallback)
+    const pUART_RxEventCallbackTypeDef pCallback) const
 {
     if (HAL_OK != HAL_UART_RegisterRxEventCallback(_huart, pCallback))
     {
@@ -274,7 +279,7 @@ status_t uart_drv_t::register_event_callback(
 /**
  * @brief Unregisters the HAL Rx Event Callback.
  */
-status_t uart_drv_t::unregister_event_callback()
+status_t uart_drv_t::unregister_event_callback() const
 {
     if (HAL_OK != HAL_UART_UnRegisterRxEventCallback(_huart))
     {
@@ -286,8 +291,9 @@ status_t uart_drv_t::unregister_event_callback()
 /**
  * @brief Registers a standard HAL callback by ID (e.g., TX complete).
  */
-status_t uart_drv_t::register_callback(const HAL_UART_CallbackIDTypeDef CB_ID,
-                                       const pUART_CallbackTypeDef pCallback)
+status_t
+uart_drv_t::register_callback(const HAL_UART_CallbackIDTypeDef CB_ID,
+                              const pUART_CallbackTypeDef pCallback) const
 {
     if (HAL_OK != HAL_UART_RegisterCallback(_huart, CB_ID, pCallback))
     {
@@ -299,7 +305,8 @@ status_t uart_drv_t::register_callback(const HAL_UART_CallbackIDTypeDef CB_ID,
 /**
  * @brief Unregisters a standard HAL callback by ID.
  */
-status_t uart_drv_t::unregister_callback(const HAL_UART_CallbackIDTypeDef CB_ID)
+status_t
+uart_drv_t::unregister_callback(const HAL_UART_CallbackIDTypeDef CB_ID) const
 {
     if (HAL_OK != HAL_UART_UnRegisterCallback(_huart, CB_ID))
     {
