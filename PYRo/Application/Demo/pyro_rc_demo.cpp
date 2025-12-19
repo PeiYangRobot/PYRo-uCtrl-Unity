@@ -13,15 +13,18 @@ extern "C"
     pyro::rc_drv_t *dr16_drv;
     void pyro_rc_demo(void *arg)
     {
-        pyro::uart_drv_t::get_instance(pyro::uart_drv_t::uart5)->enable_rx_dma();
+        // Initialize the DR16 RC driver
+        // init_thread already did this part
+        // User can customize the initialization as needed
         dr16_drv = pyro::rc_hub_t::get_instance(
             pyro::rc_hub_t::DR16);
         dr16_drv->init();
         dr16_drv->enable();
-        static auto *p_ctrl = static_cast<pyro::dr16_drv_t::dr16_ctrl_t *>(
-            dr16_drv->get_p_ctrl());
-        static auto *p_last_ctrl = static_cast<pyro::dr16_drv_t::dr16_ctrl_t *>(
-            dr16_drv->get_p_last_ctrl());
+
+        // read data for special usage
+        auto rc_data = static_cast<const pyro::dr16_drv_t::dr16_ctrl_t *>(
+            dr16_drv->read());
+
         vTaskDelete(nullptr);
     }
 }
