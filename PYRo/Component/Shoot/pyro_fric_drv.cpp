@@ -3,10 +3,10 @@
 namespace pyro
 {
 fric_drv_t::fric_drv_t(motor_base_t *motor_base,
-                       const pid_ctrl_t &speed_pid, 
+                       const pid_t &speed_pid,
                        float radius,
                        rotate_direction_t direction)
-    : _motor_base(_motor_base),
+    : _motor_base(motor_base),
       _speed_pid(speed_pid),
       _radius(radius),
       _direction(direction)
@@ -40,6 +40,11 @@ float fric_drv_t::get_speed()
     return _current_speed;
 }
 
+float fric_drv_t::get_target_speed()
+{
+    return _target_speed;
+}
+
 void fric_drv_t::update_feedback()
 {
     _motor_base->update_feedback();
@@ -48,7 +53,7 @@ void fric_drv_t::update_feedback()
 
 void fric_drv_t::control()
 {
-    float torque_cmd = _speed_pid.compute(_target_speed, _current_speed, _dt);
+    float torque_cmd = _speed_pid.calculate(_target_speed, _current_speed);
     _motor_base->send_torque(torque_cmd);
 }
 

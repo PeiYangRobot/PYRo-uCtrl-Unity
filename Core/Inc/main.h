@@ -57,9 +57,16 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define CS1_ACCEL_Pin GPIO_PIN_0
+#define CS1_ACCEL_GPIO_Port GPIOC
+#define CS1_GYRO_Pin GPIO_PIN_3
+#define CS1_GYRO_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
-
+#define CS1_ACCEL_Pin GPIO_PIN_0
+#define CS1_ACCEL_GPIO_Port GPIOC
+#define CS1_GYRO_Pin GPIO_PIN_3
+#define CS1_GYRO_GPIO_Port GPIOC
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -2,7 +2,7 @@
 #define __PYRO_FRIC_H__
 
 #include "pyro_dji_motor_drv.h"
-#include "pyro_pid_ctrl.h"
+#include "pyro_algo_pid.h"
 #include "pyro_vofa.h"
 
 namespace pyro
@@ -17,7 +17,7 @@ public:
     };
 
     fric_drv_t(motor_base_t *motor_base,
-               const pid_ctrl_t &speed_pid, 
+               const pid_t &speed_pid,
                float radius,
                rotate_direction_t direction
             );
@@ -29,15 +29,16 @@ public:
     void set_speed(float target_speed);
     void zero_force();
     float get_speed();
+    float get_target_speed();
     void update_feedback();
     void control();
 
 private:
     motor_base_t *_motor_base;
-    pid_ctrl_t _speed_pid;
+    pid_t _speed_pid;
+    float _radius;
     rotate_direction_t _direction;
     float _dt = 0.001f;
-    float _radius;
     float _target_speed;
     float _current_speed;
 

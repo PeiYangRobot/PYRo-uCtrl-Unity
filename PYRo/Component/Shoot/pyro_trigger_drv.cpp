@@ -9,15 +9,18 @@ namespace pyro
 {
 
 trigger_drv_t::trigger_drv_t(motor_base_t *motor_base,
-                             const pid_ctrl_t &_rotate_pid, 
-                             const pid_ctrl_t &_position_pid,
-                             float step_radian
-                     )
+                             const pid_t &_rotate_pid,
+                             const pid_t &_position_pid,
+                             float step_radian,
+                             trigger_counter_direction_t direction)
     : motor_base(motor_base),
       _rotate_pid(_rotate_pid),
       _position_pid(_position_pid),
-      _step_radian(step_radian)
+      _step_radian(step_radian),
+      _direction(direction)
 {
+    // update_feedback();
+    // _target_trigger_radian = _current_trigger_radian;
 }
 
 void trigger_drv_t::set_dt(float dt)
@@ -34,31 +37,69 @@ void trigger_drv_t::set_rotate(float target_rotate)
 {
     if (POSITION == _mode)
     {
-        _rotate_pid.reset();
-        _position_pid.reset();
+        _rotate_pid.clear();
+        _position_pid.clear();
     }
     _mode = ROTATE;
-    _target_rotate = target_rotate;
+    if(UP == _direction)
+    {
+        _target_trigger_rotate = -target_rotate;
+    }
+    else
+    {
+        _target_trigger_rotate = target_rotate;
+    }
 }
 
-void trigger_drv_t::set_radian(float target_radian)
+// void trigger_drv_t::set_radian(float target_radian)
+// {
+//     if (ROTATE == _mode)
+//     {
+//         _rotate_pid.reset();
+//     }
+//     _mode = POSITION;
+
+//     _target_trigger_total_radian = target_radian;
+// }
+
+void trigger_drv_t::step_forward()
 {
     if (ROTATE == _mode)
     {
-        _rotate_pid.reset();
+        _rotate_pid.clear();
     }
     _mode = POSITION;
-    _target_radian = target_radian;
+    _target_trigger_radian = _current_trigger_radian + _step_radian;
+}
+
+void trigger_drv_t::step_forward(float radian_diff)
+{
+    if (ROTATE == _mode)
+    {
+        _rotate_pid.clear();
+    }
+    _mode = POSITION;
+    _target_trigger_radian = _current_trigger_radian + radian_diff;
 }
 
 float trigger_drv_t::get_rotate()
 {
-    return _current_rotate;
+    return _current_trigger_rotate;
 }
 
 float trigger_drv_t::get_radian()
 {
-    return _current_radian;
+    return _current_trigger_radian;
+}
+
+float trigger_drv_t::get_target_radian()
+{
+    return _target_trigger_radian;
+}
+
+float trigger_drv_t::get_step_radian()
+{
+    return _step_radian;
 }
 
 void trigger_drv_t::zero_force()
@@ -69,61 +110,193 @@ void trigger_drv_t::zero_force()
 void trigger_drv_t::update_feedback()
 {
     motor_base->update_feedback();
-    _current_rotate = motor_base->get_current_rotate() / _gear_ratio;
+    if(UP == _direction)
+    {
+    _current_trigger_rotate = motor_base->get_current_rotate() / _gear_ratio;
+    }
+    else
+    {
+    _current_trigger_rotate = -motor_base->get_current_rotate() / _gear_ratio;
+    }
+    _last_motor_radian = _current_motor_radian;
     _current_motor_radian = motor_base->get_current_position();
-    _current_radian = _update_trigger_radian();
-
+    _motor_to_trigger_radian();
 }
 
 void trigger_drv_t::control()
 {
-    update_feedback();
     if(ROTATE == _mode)
     {
-        float torque_cmd = _rotate_pid.compute(_target_rotate, _current_rotate, _dt);
-        motor_base->send_torque(torque_cmd);
+        float torque_cmd = _rotate_pid.calculate(_target_trigger_rotate, _current_trigger_rotate);
+        if(DOWN == _direction)
+        {
+            motor_base->send_torque(-torque_cmd);
+        }
+        if(UP == _direction)
+        {
+            motor_base->send_torque(torque_cmd);
+        }
+        
     }
     else if(POSITION == _mode) 
     {
-        float rotate_cmd = _position_pid.compute(_target_radian, _current_radian, _dt);
-        float torque_cmd = _rotate_pid.compute(rotate_cmd, _current_rotate, _dt);
-        motor_base->send_torque(torque_cmd);
+        float rotate_cmd{};
+        float torque_cmd{};
+        if(_target_trigger_radian < PI)
+        {
+            rotate_cmd = _position_pid.calculate(_target_trigger_radian, _current_trigger_radian);
+            torque_cmd = _rotate_pid.calculate(rotate_cmd, _current_trigger_rotate);
+        }
+        else
+        {
+            if(_current_trigger_radian > 0.0f)
+            {
+                rotate_cmd = _position_pid.calculate(_target_trigger_radian, _current_trigger_radian);
+                torque_cmd = _rotate_pid.calculate(rotate_cmd, _current_trigger_rotate);
+            }
+            else
+            {
+                _target_trigger_radian -= 2 * PI;
+            }
+        }
+        // if(_target_trigger_radian - _current_trigger_radian > PI)
+        // {
+        //     _target_trigger_radian -= 2 * PI;
+        // }
+        // float rotate_cmd = _position_pid.calculate(_target_trigger_radian, _current_trigger_radian, _dt);
+        // float torque_cmd = _rotate_pid.calculate(rotate_cmd, _current_trigger_rotate, _dt);
+        if(DOWN == _direction)
+        {
+            motor_base->send_torque(-torque_cmd);
+        }
+        if(UP == _direction)
+        {
+            motor_base->send_torque(torque_cmd);
+        }
     }
 }
 
-float trigger_drv_t::_update_trigger_radian()
+void trigger_drv_t::_motor_to_trigger_radian()
 {
-    if(_is_first_update)
+    float motor_radian_diff = 0.0f;
+    if(DOWN == _direction)
     {
-        _last_motor_radian = _current_motor_radian + PI;
-        _is_first_update = false;
-        return _last_motor_radian / _gear_ratio;
+        if(abs(_current_motor_radian - _last_motor_radian) > 0.01f)
+        {
+            if(_current_motor_radian - _last_motor_radian > 0)
+            {
+                motor_radian_diff = 2 * PI - (_current_motor_radian - _last_motor_radian);
+            }
+            else
+            {
+                motor_radian_diff = abs(_current_motor_radian - _last_motor_radian);
+            }
+        }
     }
+    else
+    {
+        if(abs(_current_motor_radian - _last_motor_radian) > 0.01f)
+        {
+            if(_current_motor_radian - _last_motor_radian < 0)
+            {
+                motor_radian_diff = 2 * PI + (_current_motor_radian - _last_motor_radian);
+            }
+            else
+            {
+                motor_radian_diff = abs(_current_motor_radian - _last_motor_radian);
+            }
+        }
+    }
+    _current_trigger_radian += motor_radian_diff / _gear_ratio;
+    if(_current_trigger_radian > PI)
+    {
+        _current_trigger_radian -= 2 * PI;
+    }
+
     
-    float current_motor_radian = _current_motor_radian + PI;
 
-    float delta_motor_radian = current_motor_radian - _last_motor_radian;
-    if(delta_motor_radian < -PI)
-    {
-        _motor_total_count += 1;
-        delta_motor_radian += 2 * PI;
-    }
-    else if(delta_motor_radian > PI)
-    {
-        _motor_total_count -= 1;
-        delta_motor_radian -= 2 * PI;
-    }
 
-    _last_motor_radian = current_motor_radian;
 
-    float total_motor_radian = current_motor_radian + _motor_total_count * 2 * PI;
-    float gear_radian = total_motor_radian / _gear_ratio;
-    if(gear_radian < -PI)
-        gear_radian += 2 * PI;
-    else if(gear_radian > PI)
-        gear_radian -= 2 * PI;
 
-    return gear_radian;
+    // float delta_motor = _current_motor_radian - _last_motor_radian;
+    // const float full_circle = 2.0f * PI;
+    // if (delta_motor < -PI)
+    // {
+    //     delta_motor += full_circle;
+    // }
+    // else if (delta_motor > PI)
+    // {
+    //     delta_motor -= full_circle;
+    // }
+
+    // _current_trigger_radian -= delta_motor / _gear_ratio;
+    // if(_current_trigger_radian > PI)
+    // {
+    //     _current_trigger_radian -= full_circle;
+    // }
+    // if(_current_trigger_radian < -PI)
+    // {
+    //     _current_trigger_radian += full_circle;
+    // }
+
+
+
+
+
+    // const float full_circle = 2.0f * PI;
+    // if (delta_motor < -PI)
+    // {
+    //     delta_motor += full_circle;
+    // }
+    // else if (delta_motor > PI)
+    // {
+    //     delta_motor -= full_circle;
+    // }
+
+    // _current_trigger_total_radian += delta_motor / _gear_ratio;
+
+    // _current_trigger_radian += delta_motor / _gear_ratio;
+    // if(_current_trigger_radian > PI)
+    // {
+    //     _current_trigger_radian -= full_circle;
+    // }
+    // if(_current_trigger_radian < -PI)
+    // {
+    //     _current_trigger_radian += full_circle;
+    // }
 }
+
+// float trigger_drv_t::_update_trigger_radian()
+// {
+//     if(_is_first_update)
+//     {
+//         _last_motor_radian = _current_motor_radian;
+//         _is_first_update = false;
+//         return _last_motor_radian / _gear_ratio;
+//     }
+    
+//     float delta_motor_radian = _current_motor_radian - _last_motor_radian;
+//     if(delta_motor_radian < -PI)
+//     {
+//         _motor_total_count += 1;
+//         delta_motor_radian += 2 * PI;
+//     }
+//     else if(delta_motor_radian > PI)
+//     {
+//         _motor_total_count -= 1;
+//         delta_motor_radian -= 2 * PI;
+//     }
+
+//     _last_motor_radian = _current_motor_radian;
+
+//     float total_motor_radian = _current_motor_radian + _motor_total_count * 2 * PI;
+//     float gear_radian = total_motor_radian / _gear_ratio;
+//     if(gear_radian < -PI)
+//         gear_radian += 2 * PI;
+//     else if(gear_radian > PI)
+//         gear_radian -= 2 * PI;
+
+//     return gear_radian;
+// }
 
 }
