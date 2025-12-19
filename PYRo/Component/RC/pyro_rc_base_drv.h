@@ -17,14 +17,14 @@
 #define __PYRO_RC_BASE_DRV_H__
 
 /* Includes ------------------------------------------------------------------*/
-#include "pyro_uart_drv.h"  // Dependency on the UART driver
-#include "message_buffer.h" // FreeRTOS Message Buffer definitions
-#include "semphr.h"         // FreeRTOS Semaphore definitions
-#include "task.h"           // FreeRTOS Task definitions
 #include "pyro_rw_lock.h"
+#include "pyro_uart_drv.h" // Dependency on the UART driver
+#include "task.h"          // FreeRTOS Task definitions
+#include "message_buffer.h" // FreeRTOS Message Buffer definitions
 
 namespace pyro
 {
+class rc_hub_t;
 
 /* Class Definition ----------------------------------------------------------*/
 /**
@@ -36,24 +36,20 @@ namespace pyro
 class rc_drv_t
 {
   public:
-    using cmd_func                = std::function<void(rc_drv_t *)>;
+    /**
+     * @brief Static sequence counter used for protocol state tracking
+     * (priority).
+     */
     inline static uint8_t sequence = 0x80;
-
-    /* Public Methods - Construction and Lifecycle
-     * -----------------------------*/
-    explicit rc_drv_t(uart_drv_t *uart);
-    virtual ~rc_drv_t();
-
     /* Public Methods - Pure Virtual Interface
      * ---------------------------------*/
-    virtual status_t init()                                       = 0;
-    virtual void enable()                                         = 0;
-    virtual void disable()                                        = 0;
-    virtual void thread()                                         = 0;
-    virtual void config_rc_cmd(const cmd_func &func)              = 0;
-    virtual void *get_p_ctrl()                                    = 0;
-    virtual void *get_p_last_ctrl()                               = 0;
-    rw_lock &get_lock() const;
+    virtual status_t init() = 0;
+    virtual void enable()   = 0;
+    virtual void disable()  = 0;
+    virtual void thread()   = 0;
+    [[nodiscard]] bool check_online() const;
+    [[nodiscard]] void const *read() const;
+    [[nodiscard]] rw_lock &get_lock() const;
 
     /**
      * @brief Callback function executed by the underlying UART driver in ISR
@@ -74,11 +70,9 @@ class rc_drv_t
   protected:
     /* Protected Members - Resources and State
      * ---------------------------------*/
-    /**
-     * @brief Static sequence counter used for protocol state tracking.
-     */
-
-    std::vector<cmd_func> _cmd_funcs;
+    explicit rc_drv_t(uart_drv_t *uart);
+    virtual ~rc_drv_t();
+    void const *_rc_data{}; ///< Pointer to the latest decoded control data.
     rw_lock *_lock{};
     MessageBufferHandle_t _rc_msg_buffer{};
     ///< Handle for the FreeRTOS message buffer.

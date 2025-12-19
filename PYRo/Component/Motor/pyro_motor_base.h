@@ -18,7 +18,7 @@ class motor_base_t
 {
   public:
     motor_base_t(can_hub_t::which_can which);
-    // ~motor_base_t(void);//先不实现
+    virtual ~motor_base_t(void);//先不实现
 
     virtual status_t enable()        = 0;
     virtual status_t disable()       = 0;

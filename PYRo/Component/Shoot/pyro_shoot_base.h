@@ -23,7 +23,8 @@ public:
         SHOOT_READY        = 0x02,
         SHOOT_START        = 0x03,
         SHOOT_WAIT         = 0x04,
-        SHOOT_CONTINUOUS   = 0x05
+        SHOOT_CONTINUOUS   = 0x05,
+        SHOOT_CALIBRATION   = 0x06
     };
     enum ready_mode_t
     {
@@ -40,16 +41,22 @@ public:
     }
     
     void set_continuous_mode_delay(uint16_t delay);
-    void dr16_cmd();
+    void dr16_cmd(void const *rc_ctrl);
     void vt03_cmd();
+    virtual void set_fric_speed(float target_speed);
     virtual void update_feedback();
     virtual void zero_force();
-    virtual void shoot_control();
+    virtual void control();
 
-private:
+protected:
+    bool _trigger_lock = false;
     total_mode_t _total_mode;
     local_mode_t _local_mode;
+    local_mode_t _last_local_mode;
     ready_mode_t _ready_mode;
+
+
+private:
     uint64_t _continuous_mode_delay = HAL_MAX_DELAY;
     uint16_t _continuous_delay = 0;
 };
