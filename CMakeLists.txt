@@ -64,7 +64,6 @@ set(DSP_REPO "${CMAKE_CURRENT_SOURCE_DIR}/Ported_third_lib/CMSIS-DSP")
 
 add_compile_definitions(
         ARM_MATH_CM7
-        __FPU_PRESENT=1
         ARM_MATH_LOOPUNROLL
 )
 
