@@ -30,11 +30,6 @@ JLinkSetting.ini
 build/
 .idea
 .vscode
-cmake*
 !*/CMakeLists.txt
 !CMakeLists.txt
-/managed_components/
-
-
-
 
