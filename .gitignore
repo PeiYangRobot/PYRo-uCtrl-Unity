@@ -28,6 +28,7 @@ JLinkSetting.ini
 
 
 build/
+.cache/
 .idea
 .vscode
 !*/CMakeLists.txt
