@@ -114,4 +114,5 @@ extern "C" void pyro_vofa_task(void *arg)
     pyro::vofa_drv_t &vofa = pyro::vofa_drv_t::get_instance(15);
     vofa.thread();
 #endif
+    vTaskDelete(nullptr);
 }

@@ -113,5 +113,5 @@ extern "C" void pyro_jcom_task(void *arg)
     pyro::jcom_drv_t &jcom = pyro::jcom_drv_t::get_instance(15);
     jcom.thread();
 #endif
-
+    vTaskDelete(nullptr);
 }
