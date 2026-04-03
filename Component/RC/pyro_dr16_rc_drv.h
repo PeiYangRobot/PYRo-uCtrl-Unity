@@ -14,7 +14,6 @@ class dr16_drv_t final : public rc_drv_t
 #ifdef DR16_UART
     static dr16_drv_t &instance();
 #endif
-
     dr16_drv_t(const dr16_drv_t &)            = delete;
     dr16_drv_t &operator=(const dr16_drv_t &) = delete;
 

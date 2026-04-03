@@ -2,7 +2,6 @@
 #include "pyro_bsp_uart.h"
 #include "pyro_crc.h"
 
-#ifdef VT03_UART
 
 namespace pyro
 {
@@ -103,4 +102,3 @@ void vt03_drv_t::unpack(const uint8_t *buf)
     }
 }
 } // namespace pyro
-#endif

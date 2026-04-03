@@ -24,15 +24,14 @@ jcom_drv_t::~jcom_drv_t()
     }
 }
 
+#ifdef JCOM_DEBUG_PORT
 jcom_drv_t &jcom_drv_t::get_instance(uint8_t max_length)
 {
-#ifdef JCOM_DEBUG_PORT
     static jcom_drv_t instance(
         max_length, &JCOM_DEBUG_PORT);
     return instance;
-#endif
-
 }
+#endif
 
 void jcom_drv_t::init()
 {
