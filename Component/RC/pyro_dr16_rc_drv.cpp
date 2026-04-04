@@ -1,7 +1,6 @@
 #include "pyro_dr16_rc_drv.h"
 #include "pyro_bsp_uart.h"
 
-#ifdef DR16_UART
 
 namespace pyro
 {
@@ -101,4 +100,3 @@ void dr16_drv_t::unpack(const uint8_t *buf)
 }
 } // namespace pyro
 
-#endif

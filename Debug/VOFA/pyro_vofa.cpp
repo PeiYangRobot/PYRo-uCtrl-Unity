@@ -26,13 +26,14 @@ vofa_drv_t::~vofa_drv_t()
     }
 }
 
+#ifdef VOFA_DEBUG_PORT
 vofa_drv_t &vofa_drv_t::get_instance(uint8_t max_length)
 {
-#ifdef VOFA_DEBUG_PORT
+
     static vofa_drv_t instance(max_length, &VOFA_DEBUG_PORT);
     return instance;
-#endif
 }
+#endif
 
 void vofa_drv_t::init()
 {
