@@ -2,6 +2,15 @@
 
 namespace pyro
 {
+float wrap_pi(float input)
+{
+    while (input > PI)
+        input -= 2 * PI;
+    while (input < -PI)
+        input += 2 * PI;
+    return input;
+}
+
 float wrap2pi_f32(float input)
 {
     return fmodf(input, 2 * PI);

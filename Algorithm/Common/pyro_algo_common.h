@@ -7,6 +7,7 @@
 
 namespace pyro
 {
+float wrap_pi(float input);
 
 float wrap2pi_f32(float input);
 
