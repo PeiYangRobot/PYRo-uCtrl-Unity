@@ -2,18 +2,18 @@
 
 namespace pyro
 {
-float wrap_pi(float input)
-{
-    while (input > PI)
-        input -= 2 * PI;
-    while (input < -PI)
-        input += 2 * PI;
-    return input;
-}
-
 float wrap2pi_f32(float input)
 {
-    return fmodf(input, 2 * PI);
+    float ret = fmodf(input, 2 * PI);
+    if (ret >= PI) 
+    {
+        ret -= 2.0f * PI;
+    } 
+    else if (ret < -PI) 
+    {
+        ret += 2.0f * PI;
+    }
+    return ret;
 }
 
 float radps_to_rpm(const float radps)
