@@ -7,7 +7,6 @@
 
 namespace pyro
 {
-
 float wrap2pi_f32(float input);
 
 float radps_to_rpm(float radps);
