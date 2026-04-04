@@ -57,10 +57,10 @@ class supercap_drv_t
     };
 
 #pragma pack(pop)
-
+#ifdef SUPERCAP_UART
     /* Public Methods --------------------------------------------------------*/
     static supercap_drv_t * get_instance();
-
+#endif
     /**
      * @brief Starts the internal task and enables communication.
      */
