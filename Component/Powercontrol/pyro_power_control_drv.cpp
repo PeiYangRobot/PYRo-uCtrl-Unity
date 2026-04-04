@@ -21,17 +21,20 @@ namespace pyro
  * @brief 设置电机的功率系数
  *
  * 为指定索引的电机设置功率预测模型的系数。
- * 注意：此函数实现中将输入的 `motor_index` 减 1，表明它期望的是从 1 开始的索引。
+ * 注意：此函数实现中将输入的 `motor_index` 减 1，表明它期望的是从 1
+ * 开始的索引。
  *
  * @param motor_index 电机的索引 (1-based)。
  * @param coefficient 包含四个系数的结构体。
  */
-void power_control_drv_t::set_motor_coefficient(int motor_index, const motor_coefficient_t& coefficient)
+void power_control_drv_t::set_motor_coefficient(
+    int motor_index, const motor_coefficient_t &coefficient)
 {
     int zero_based_index = motor_index - 1; // 转换为 0-based 索引
-    if (zero_based_index >= 0 && zero_based_index < static_cast<int>(_motor_coefficients.size()))
+    if (zero_based_index >= 0 &&
+        zero_based_index < static_cast<int>(_motor_coefficients.size()))
     {
-            _motor_coefficients[zero_based_index] = coefficient;
+        _motor_coefficients[zero_based_index] = coefficient;
     }
 }
 
@@ -46,12 +49,15 @@ void power_control_drv_t::set_motor_coefficient(int motor_index, const motor_coe
  * @param gyro 当前的角速度 (rad/s)。
  * @return float 预测的功率值 (W)。如果索引无效，返回 0.0f。
  */
-float power_control_drv_t::motor_power_predict(int motor_index, float tau, float gyro) const
+float power_control_drv_t::motor_power_predict(int motor_index, float tau,
+                                               float gyro) const
 {
-    if (motor_index >= 0 && motor_index < static_cast<int>(_motor_coefficients.size()))
+    if (motor_index >= 0 &&
+        motor_index < static_cast<int>(_motor_coefficients.size()))
     {
-        const motor_coefficient_t& c = _motor_coefficients[motor_index];
-        return c.k1 * tau * gyro + c.k2 * std::fabs(gyro) + c.k3 * tau * tau + c.k4;
+        const motor_coefficient_t &c = _motor_coefficients[motor_index];
+        return c.k1 * tau * gyro + c.k2 * std::fabs(gyro) + c.k3 * tau * tau +
+               c.k4;
     }
     else
     {
@@ -73,16 +79,18 @@ float power_control_drv_t::motor_power_predict(int motor_index, float tau, float
  * @param restricted_power 允许的最大功率。
  * @return float 计算出的限制后电流。
  */
-float power_control_drv_t::_motor_power_restrict_torque(int motor_index, float origin_torque, float gyro, float restricted_power) const
+float power_control_drv_t::_motor_power_restrict_torque(
+    int motor_index, float origin_torque, float gyro,
+    float restricted_power) const
 {
     // 假设 motor_index 已经是 0-based 且有效
-    const motor_coefficient_t& c = _motor_coefficients[motor_index];
+    const motor_coefficient_t &c = _motor_coefficients[motor_index];
 
-    float a = c.k3;
-    float b = c.k1 * gyro;
+    float a                      = c.k3;
+    float b                      = c.k1 * gyro;
     float c_term = c.k2 * std::fabs(gyro) + c.k4 - restricted_power;
 
-    float delta = b * b - 4 * a * c_term; // 判别式
+    float delta  = b * b - 4 * a * c_term; // 判别式
 
     if (delta <= 0)
     {
@@ -94,8 +102,8 @@ float power_control_drv_t::_motor_power_restrict_torque(int motor_index, float o
     {
         // 有两个实根，根据原始电流的符号选择合适的根
         float sqrt_delta = std::sqrt(delta);
-        float tau1 = (-b + sqrt_delta) / (2 * a);
-        float tau2 = (-b - sqrt_delta) / (2 * a);
+        float tau1       = (-b + sqrt_delta) / (2 * a);
+        float tau2       = (-b - sqrt_delta) / (2 * a);
 
         if (origin_torque > 0)
         {
@@ -116,24 +124,29 @@ float power_control_drv_t::_motor_power_restrict_torque(int motor_index, float o
  * @brief 批量计算多个电机的限制后电流（内部实现）
  *
  * 这是实际执行计算的私有函数。它会根据总功率限制和功率分配比例，
- * 为每个电机计算其允许的最大功率，然后调用 `motor_power_restrict_torque` 获取限制后电流，
- * 最后应用一阶低通滤波以平滑电流变化。
+ * 为每个电机计算其允许的最大功率，然后调用 `motor_power_restrict_torque`
+ * 获取限制后电流， 最后应用一阶低通滤波以平滑电流变化。
  *
  * @param motor_data 指向 motor_data_t 结构体数组的指针。
  * @param motor_num 电机的数量。
  * @param power_limit 总的可用功率限制。
- * @param power_ratios 指向浮点数数组的指针，每个元素代表对应电机的功率分配比例。
+ * @param power_ratios
+ * 指向浮点数数组的指针，每个元素代表对应电机的功率分配比例。
  */
 void power_control_drv_t::calculate_restricted_torques(
-    motor_data_t* motor_data,
-    int motor_num,
-    float power_limit,
-    float buf_engy,
-    const float* power_ratios
-) const
+    motor_data_t *motor_data, int motor_num, float power_limit,
+    const float *power_ratios) const
 {
-    if (motor_num <= 0 || motor_data == nullptr || power_limit <= 0) {
+    if (motor_num <= 0 || motor_data == nullptr || power_limit <= 0)
+    {
         return;
+    }
+
+    // 计算总预测功率（此处使用 motor_data 中的 power_predict 字段）
+    float total_power = 0.0f;
+    for (int i = 0; i < motor_num; i++)
+    {
+        total_power += motor_data[i].power_predict;
     }
 
     // 初始化功率分配比例
@@ -141,10 +154,10 @@ void power_control_drv_t::calculate_restricted_torques(
     if (nullptr == power_ratios)
     {
         // 如果未提供比例，则平均分配功率
-        float avg_ratio = 1.0f / motor_num;
+        float avg_ratio_factor = 1.0f / total_power;
         for (int i = 0; i < motor_num; i++)
         {
-            ratios[i] = avg_ratio;
+            ratios[i] = avg_ratio_factor * motor_data[i].power_predict;
         }
     }
     else
@@ -156,21 +169,10 @@ void power_control_drv_t::calculate_restricted_torques(
         }
     }
 
-    // 计算总预测功率（此处使用 motor_data 中的 power_predict 字段）
-    float total_power = 0.0f;
-    for (int i = 0; i < motor_num; i++)
-    {
-        total_power += motor_data[i].power_predict;
-    }
-
-    for (int i = 0; i < motor_num; i++)
-    {
-        ratios[i] = motor_data[i].power_predict / total_power;
-    }
-
     // 动态调整滤波系数 alpha，用于平滑电流变化
     float alpha = 1.0f; // 默认无滤波
-    const float POWER_THRESHOLD = power_limit * 1.1f; // 功率阈值，用于判断是否需要强力限制
+    const float POWER_THRESHOLD =
+        power_limit * 1.1f; // 功率阈值，用于判断是否需要强力限制
     if (total_power > POWER_THRESHOLD)
     {
         alpha = 0.8f; // 功率远超限制，快速响应
@@ -189,19 +191,9 @@ void power_control_drv_t::calculate_restricted_torques(
             float motor_power_limit = power_limit * ratios[i];
 
             // 计算该电机的限制后电流
-            if (motor_data[i].power_predict < motor_power_limit)
-            {
-                // 如果预测功率已经在限制范围内，不进行限制
-                motor_data[i].restricted_torque = motor_data[i].torque_cmd;
-                continue;
-            }
             float restricted_torque = _motor_power_restrict_torque(
-                i,
-                motor_data[i].torque_cmd,
-                motor_data[i].gyro,
-                motor_power_limit
-            );
-
+                i, motor_data[i].torque_cmd, motor_data[i].gyro,
+                motor_power_limit);
 
             // 应用一阶滤波，更新限制后电流
             motor_data[i].restricted_torque =
@@ -218,16 +210,8 @@ void power_control_drv_t::calculate_restricted_torques(
         }
     }
 
-    if (buf_engy < 40.0f)
-    {
-        for (int i = 0; i < motor_num; i++)
-        {
-            motor_data[i].restricted_torque = 0.8f * motor_data[i].restricted_torque;
-        }
-    }
-
     // 更新 last_torque 为下一次滤波做准备
-    for(int i = 0; i < motor_num; i++)
+    for (int i = 0; i < motor_num; i++)
     {
         motor_data[i].last_torque = motor_data[i].restricted_torque;
     }
@@ -243,14 +227,11 @@ void power_control_drv_t::calculate_restricted_torques(
  * @param motor_num 电机的数量。
  * @param power_limit 总的可用功率限制。
  */
-void power_control_drv_t::calculate_restricted_torques(
-    motor_data_t* motor_data,
-    int motor_num,
-    float power_limit,
-    float buf_engy
-) const
+void power_control_drv_t::calculate_restricted_torques(motor_data_t *motor_data,
+                                                       int motor_num,
+                                                       float power_limit) const
 {
-    calculate_restricted_torques(motor_data, motor_num, power_limit, buf_engy,nullptr);
+    calculate_restricted_torques(motor_data, motor_num, power_limit, nullptr);
 }
 
 /**
@@ -265,4 +246,4 @@ power_control_drv_t::power_control_drv_t(int motor_index)
     _motor_coefficients.resize(motor_index);
 }
 
-}
+} // namespace pyro
