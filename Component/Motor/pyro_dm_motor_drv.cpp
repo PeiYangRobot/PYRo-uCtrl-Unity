@@ -3,7 +3,7 @@
 namespace pyro
 {
 dm_motor_drv_t::dm_motor_drv_t(uint32_t can_id, uint32_t master_id,
-                                     can_hub_t::which_can which)
+                                     bsp_can::which_can which)
     : motor_base_t(which)
 {
     _master_id     = master_id;
@@ -70,7 +70,8 @@ static float uint_to_float(int x_int, float x_min, float x_max, int bits)
 status_t pyro::dm_motor_drv_t::update_feedback()
 {
     std::array<uint8_t, 8> data;
-    _feedback_msg->get_data(data);
+    if (!_feedback_msg->get_data(data))
+        return PYRO_ERROR;
     _error_code = static_cast<error_code>(((data[0]>>4)&0x0f));
     switch(_error_code)
     {

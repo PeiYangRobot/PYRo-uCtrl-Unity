@@ -1,5 +1,3 @@
-
-
 /**
  * @file pyro_referee.cpp
  * @brief RoboMaster Referee System Driver (Modern C++ Style Implementation)
@@ -16,7 +14,6 @@
 
 namespace pyro
 {
-
 
 // ==========================================================================
 // Task Implementation
@@ -60,11 +57,20 @@ referee_drv_t *referee_drv_t::get_instance()
 
 referee_drv_t::referee_drv_t(uart_drv_t *uart_handle)
     : _uart(uart_handle), _task(nullptr), _data{}, _unpack_obj{}, _send_seq(0),
-      _robot_id(0), _is_online(false), _last_update_time(0)
+      _robot_id(0), _tx_buffer_idx(0), _is_online(false), _last_update_time(0)
 {
     fifo_s_init(&_fifo, _fifo_buf, FIFO_BUF_LEN);
-    _tx_buffer = static_cast<uint8_t *>(pvPortDmaMalloc(MAX_TX_FRAME_LEN));
-    memset(_tx_buffer, 0, MAX_TX_FRAME_LEN);
+
+    // 【修改】申请多个 DMA 缓冲区用于 Ping-Pong 流水线
+    for (auto &buf : _tx_buffers)
+    {
+        buf = static_cast<uint8_t *>(pvPortDmaMalloc(MAX_TX_FRAME_LEN));
+        memset(buf, 0, MAX_TX_FRAME_LEN);
+    }
+
+    // 【修改】创建二值信号量，初始必须 Give 一次，代表 UART 外设一开始是空闲的
+    _tx_cplt_sem = xSemaphoreCreateBinary();
+    xSemaphoreGive(_tx_cplt_sem);
 
     _task = new referee_task(this);
 }
@@ -94,6 +100,11 @@ void referee_drv_t::init(const std::initializer_list<cmd_id> listening_ids)
         { return this->rx_callback(p, size, task_woken); },
         reinterpret_cast<uint32_t>(this));
 
+    // 【新增】注册 TX DMA 发送完成中断回调
+    _uart->set_tx_cplt_callback(
+        [this](BaseType_t &woken)
+        { xSemaphoreGiveFromISR(this->_tx_cplt_sem, &woken); });
+
     if (_task)
         _task->start();
 }
@@ -111,6 +122,11 @@ void referee_drv_t::init()
         { return this->rx_callback(p, size, task_woken); },
         reinterpret_cast<uint32_t>(this));
 
+    // 【新增】注册 TX DMA 发送完成中断回调
+    _uart->set_tx_cplt_callback(
+        [this](BaseType_t &woken)
+        { xSemaphoreGiveFromISR(this->_tx_cplt_sem, &woken); });
+
     if (_task)
         _task->start();
 }
@@ -127,37 +143,63 @@ uint16_t referee_drv_t::get_client_id() const
 bool referee_drv_t::send_packet(cmd_id cmd_id_val, const void *data,
                                 uint16_t const len)
 {
-    // C++ Cast: static_cast for enum to int
     const auto cmd_val             = static_cast<uint16_t>(cmd_id_val);
-
     const uint16_t frame_total_len = HEADER_CMDID_LEN + len + CRC16_SIZE;
-    if (frame_total_len > MAX_TX_FRAME_LEN)
-        return false;
-    if (!_uart)
+
+    if (frame_total_len > MAX_TX_FRAME_LEN || !_uart)
         return false;
 
-    // C++ Cast: reinterpret_cast for byte buffer manipulation
-    auto *p_header        = reinterpret_cast<frame_header_t *>(_tx_buffer);
+    // 获取互斥锁，确保多线程调用组包发送互不干扰
+    const scoped_mutex_t lock(_tx_mutex, pdMS_TO_TICKS(100));
+    if (!lock.is_locked())
+        return false;
 
+    // 【关键优化：CPU与DMA并行】
+    // 1. 获取一个尚未被 DMA 占用的后台缓冲区
+    // 由于我们使用的是二值信号量拦截，能走到这里的 buffer
+    // 必定是上一包的闲置内存
+    uint8_t *current_tx_buf = _tx_buffers[_tx_buffer_idx];
+    _tx_buffer_idx          = (_tx_buffer_idx + 1) % TX_BUFFER_NUM;
+
+    // 2. 组装数据。此时 CPU 在干活，而前一包可能仍在通过 DMA 在后台高速发送中！
+    auto *p_header        = reinterpret_cast<frame_header_t *>(current_tx_buf);
     p_header->sof         = HEADER_SOF;
     p_header->data_length = len;
     p_header->seq         = _send_seq++;
     p_header->crc8        = 0;
 
-    append_crc8_check_sum(reinterpret_cast<uint8_t *>(p_header), HEADER_SIZE);
+    append_crc8_check_sum(current_tx_buf, HEADER_SIZE);
 
-    // Pointer arithmetic handled with proper casting
-    uint8_t *p_cmd_start = _tx_buffer + HEADER_SIZE;
+    uint8_t *p_cmd_start = current_tx_buf + HEADER_SIZE;
     auto *p_cmd_id       = reinterpret_cast<uint16_t *>(p_cmd_start);
     *p_cmd_id            = cmd_val;
 
     if (len > 0 && data != nullptr)
     {
-        memcpy(_tx_buffer + HEADER_CMDID_LEN, data, len);
+        memcpy(current_tx_buf + HEADER_CMDID_LEN, data, len);
     }
 
-    append_crc16_check_sum(_tx_buffer, frame_total_len);
-    return (_uart->write(_tx_buffer, frame_total_len) == PYRO_OK);
+    append_crc16_check_sum(current_tx_buf, frame_total_len);
+
+    // 3. 阻塞拿取二值信号量
+    // 如果 UART 处于空闲状态，直接拿取通过；
+    // 如果上一包 DMA 发送仍在进行，则任务休眠挂起，直到上一包发送完毕并进中断
+    // Give 释放。
+    if (xSemaphoreTake(_tx_cplt_sem, pdMS_TO_TICKS(50)) != pdTRUE)
+    {
+        return false;
+    }
+
+    // 4. 一旦上包发完（或本来就空闲），无缝衔接立即发起当前缓冲区的非阻塞 DMA
+    // 发送
+    if (_uart->write(current_tx_buf, frame_total_len) != PYRO_OK)
+    {
+        // 遇到极端的底层错误被拒发，归还信号量以免死锁
+        xSemaphoreGive(_tx_cplt_sem);
+        return false;
+    }
+
+    return true;
 }
 
 bool referee_drv_t::_send_interaction_packet_base(const uint16_t sub_cmd_id,
@@ -165,9 +207,8 @@ bool referee_drv_t::_send_interaction_packet_base(const uint16_t sub_cmd_id,
                                                   const void *data,
                                                   const uint16_t len)
 {
-    // Payload max check: 128 - 9 (Frame overhead) - 6 (Interact Header) = 113
-    // Safety buffer used: 112
-    if (len + sizeof(interaction_header_t) > 119)
+    // 边界修复：交互数据段负载包含 6 字节 header，总长不得超过 118
+    if (len + sizeof(interaction_header_t) > 118)
         return false;
 
     uint8_t buffer[128]; // Use stack buffer
@@ -205,7 +246,7 @@ bool referee_drv_t::send_robot_interaction(const uint16_t receiver_id,
 bool referee_drv_t::send_ui_interaction(const uint16_t sub_cmd_id,
                                         const void *data)
 {
-    static uint8_t len = 0;
+    uint8_t len = 0;
     switch (sub_cmd_id)
     {
         case static_cast<uint16_t>(interaction_sub_cmd::UI_CMD_DELETE):
@@ -230,8 +271,10 @@ bool referee_drv_t::send_ui_interaction(const uint16_t sub_cmd_id,
             len = 0;
             break;
     }
-    return _send_interaction_packet_base(sub_cmd_id, get_client_id(), data,
-                                         len);
+    bool ret =
+        _send_interaction_packet_base(sub_cmd_id, get_client_id(), data, len);
+    vTaskDelay(pdMS_TO_TICKS(40));
+    return ret;
 }
 
 bool referee_drv_t::send_custom_info(const char *message)
@@ -259,8 +302,9 @@ bool referee_drv_t::send_custom_info(const char *message)
 // RX Implementation
 // ==========================================================================
 
-bool referee_drv_t::rx_callback(uint8_t *p, const uint16_t size,
-                                BaseType_t task_woken)
+__attribute__((section(".itcm_text"))) bool
+referee_drv_t::rx_callback(uint8_t *p, const uint16_t size,
+                           BaseType_t task_woken)
 {
     // FIFO expects char*
     fifo_s_puts(&_fifo, reinterpret_cast<char *>(p), size);
@@ -402,8 +446,7 @@ void referee_drv_t::solve_data(const uint8_t *frame)
             break;
         case cmd_id::ROBOT_STATE:
             safe_copy(_data.robot_status, frame + index, data_length);
-            _robot_id =
-                _data.robot_status.robot_id; // <--- 新增这行，自动同步真实ID！
+            _robot_id = _data.robot_status.robot_id; // 自动同步真实ID
             break;
         case cmd_id::POWER_HEAT_DATA:
             safe_copy(_data.power_heat, frame + index, data_length);
@@ -411,7 +454,7 @@ void referee_drv_t::solve_data(const uint8_t *frame)
         case cmd_id::ROBOT_POS:
             safe_copy(_data.robot_pos, frame + index, data_length);
             break;
-        case cmd_id::BUFF_MUSK:
+        case cmd_id::BUFF_INFO:
             safe_copy(_data.buff, frame + index, data_length);
             break;
         case cmd_id::ROBOT_HURT:
@@ -419,8 +462,9 @@ void referee_drv_t::solve_data(const uint8_t *frame)
             break;
         case cmd_id::SHOOT_DATA:
             safe_copy(_data.shoot, frame + index, data_length);
+            _data.shoot_launching_count++;
             break;
-        case cmd_id::BULLET_REMAINING:
+        case cmd_id::PROJECTILE_ALLOWANCE:
             safe_copy(_data.allowance, frame + index, data_length);
             break;
         case cmd_id::ROBOT_RFID:

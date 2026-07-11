@@ -7,11 +7,11 @@
 
 namespace pyro
 {
-dji_motor_tx_frame_t::dji_motor_tx_frame_t(can_hub_t::which_can which,
+dji_motor_tx_frame_t::dji_motor_tx_frame_t(bsp_can::which_can which,
                                                  uint32_t id)
     : _key(id, which)
 {
-    _can = can_hub_t::get_instance()->hub_get_can_obj(_key.second);
+    _can = bsp_can::get_can(_key.second);
     _register_list.fill(0);
     _update_list.fill(0);
     _value_list.fill(0);
@@ -77,7 +77,7 @@ dji_motor_tx_frame_pool_t * dji_motor_tx_frame_pool_t::get_instance(void)
 }
 
 dji_motor_tx_frame_t *
-dji_motor_tx_frame_pool_t::get_frame(can_hub_t::which_can which, uint32_t id)
+dji_motor_tx_frame_pool_t::get_frame(bsp_can::which_can which, uint32_t id)
 {
     dji_motor_tx_frame_t *frame = nullptr;
     dji_motor_tx_frame_t::_frame_key_t key(id, which);
@@ -101,7 +101,7 @@ dji_motor_tx_frame_pool_t::get_frame(can_hub_t::which_can which, uint32_t id)
 
 dji_motor_drv_t::dji_motor_drv_t(
     dji_motor_tx_frame_t::register_id_t id,
-    can_hub_t::which_can which)
+    bsp_can::which_can which)
     : motor_base_t(which), _register_id(id)
 {
 }
@@ -120,7 +120,7 @@ status_t dji_motor_drv_t::disable()
 
 status_t dji_motor_drv_t::update_feedback()
 {
-    static std::array<uint8_t, 8> data;
+    std::array<uint8_t, 8> data{};
     if (!_feedback_msg)
         return PYRO_ERROR;
 
@@ -164,8 +164,7 @@ static float constraint(float value, float max)
 
 status_t dji_motor_drv_t::send_torque(float torque)
 {
-    static std::array<uint8_t, 8> data;
-    data.fill(0);
+
     torque=constraint(torque,_max_torque_f);
     int16_t torque_i = (int16_t)(torque / _max_torque_f * _max_torque_i);
     if (_enable)
@@ -181,7 +180,7 @@ status_t dji_motor_drv_t::send_torque(float torque)
 }
 
 dji_m3508_motor_drv_t::dji_m3508_motor_drv_t(
-    dji_motor_tx_frame_t::register_id_t id, can_hub_t::which_can which)
+    dji_motor_tx_frame_t::register_id_t id, bsp_can::which_can which)
     : dji_motor_drv_t(id, which)
 {
     switch (id)
@@ -218,7 +217,7 @@ dji_m3508_motor_drv_t::dji_m3508_motor_drv_t(
 }
 
 dji_m2006_motor_drv_t::dji_m2006_motor_drv_t(
-    dji_motor_tx_frame_t::register_id_t id, can_hub_t::which_can which)
+    dji_motor_tx_frame_t::register_id_t id, bsp_can::which_can which)
     : dji_motor_drv_t(id, which)
 {
     switch (id)
@@ -255,7 +254,7 @@ dji_m2006_motor_drv_t::dji_m2006_motor_drv_t(
 }
 
 dji_gm_6020_motor_drv_t::dji_gm_6020_motor_drv_t(
-    dji_motor_tx_frame_t::register_id_t id, can_hub_t::which_can which)
+    dji_motor_tx_frame_t::register_id_t id, bsp_can::which_can which)
     : dji_motor_drv_t(id, which)
 {
     switch (id)

@@ -14,14 +14,14 @@ hybrid_kin_t::hybrid_kin_t(const float track_spacing,
 {
     // Tracks are assumed symmetric left-to-right
     // 假设履带左右对称，取间距的一半
-    _k_track = abs(track_spacing) / 2.0f;
+    _k_track = std::abs(track_spacing) / 2.0f;
 
     // Store directly calculated K-values for each wheel
     // 直接存储用户传入的独立 K 值
-    _k_fl = abs(k_fl);
-    _k_fr = abs(k_fr);
-    _k_bl = abs(k_bl);
-    _k_br = abs(k_br);
+    _k_fl = std::abs(k_fl);
+    _k_fr = std::abs(k_fr);
+    _k_bl = std::abs(k_bl);
+    _k_br = std::abs(k_br);
 }
 
 // ============================================================================
@@ -30,11 +30,11 @@ hybrid_kin_t::hybrid_kin_t(const float track_spacing,
 hybrid_kin_t::hybrid_kin_t(const float track_spacing,
                            const float mec_wheelbase, const float mec_track_width)
 {
-    _k_track = abs(track_spacing) / 2.0f;
+    _k_track = std::abs(track_spacing) / 2.0f;
 
     // Standard formula: K = (Wheelbase + TrackWidth) / 2
     // 标准底盘公式：K = (轴距 + 轮距) / 2  (等价于 半轴距 + 半轮距)
-    const float k_std = (abs(mec_wheelbase) + abs(mec_track_width)) / 2.0f;
+    const float k_std = (std::abs(mec_wheelbase) + std::abs(mec_track_width)) / 2.0f;
 
     // Apply unified K to all wheels
     // 将统一的 K 赋值给所有轮子
@@ -45,7 +45,7 @@ hybrid_kin_t::hybrid_kin_t(const float track_spacing,
 }
 
 // ============================================================================
-// Kinematics Solver / 运动学解算器
+// Inverse Kinematics Solver / 逆运动学解算器 (底盘速度 -> 轮速)
 // ============================================================================
 hybrid_kin_t::hybrid_speeds_t
 hybrid_kin_t::solve(const float vx, const float vy, const float wz, const bool track_en, const missing_mec_e missing) const
@@ -114,6 +114,64 @@ hybrid_kin_t::solve(const float vx, const float vy, const float wz, const bool t
     }
 
     return ws;
+}
+
+// ============================================================================
+// Forward Kinematics Solver / 正运动学解算器 (麦轮转速 -> 底盘速度)
+// ============================================================================
+hybrid_kin_t::chassis_speeds_t
+hybrid_kin_t::forward_solve(const float mec_fl, const float mec_fr,
+                            const float mec_bl, const float mec_br,
+                            const missing_mec_e missing) const
+{
+    chassis_speeds_t chassis{}; // 初始化为零
+
+    switch (missing)
+    {
+        case missing_mec_e::FL:
+            // 原逆解逻辑: fr = vy + wz*Kfr | bl = vx - wz*Kbl | br = vx - vy
+            chassis.wz = (mec_br - mec_bl + mec_fr) / (_k_bl + _k_fr);
+            chassis.vx = mec_bl + chassis.wz * _k_bl;
+            chassis.vy = mec_fr - chassis.wz * _k_fr;
+            break;
+
+        case missing_mec_e::FR:
+            // 原逆解逻辑: fl = -vy - wz*Kfl | bl = vx + vy | br = vx + wz*Kbr
+            chassis.wz = (mec_br - mec_fl - mec_bl) / (_k_br + _k_fl);
+            chassis.vx = mec_br - chassis.wz * _k_br;
+            chassis.vy = -mec_fl - chassis.wz * _k_fl;
+            break;
+
+        case missing_mec_e::BL:
+            // 原逆解逻辑: fl = vx - wz*Kfl | fr = vx + vy | br = -vy + wz*Kbr
+            chassis.wz = (mec_fr - mec_fl + mec_br) / (_k_fl + _k_br);
+            chassis.vx = mec_fl + chassis.wz * _k_fl;
+            chassis.vy = -mec_br + chassis.wz * _k_br;
+            break;
+
+        case missing_mec_e::BR:
+            // 原逆解逻辑: fl = vx - vy | fr = vx + wz*Kfr | bl = vy - wz*Kbl
+            chassis.wz = (mec_fr - mec_bl - mec_fl) / (_k_fr + _k_bl);
+            chassis.vx = mec_fr - chassis.wz * _k_fr;
+            chassis.vy = mec_bl + chassis.wz * _k_bl;
+            break;
+
+        case missing_mec_e::NONE:
+        default:
+            // 标准 4 轮全向正解算法 (完全兼容任意四个不同的非对称 K 值)
+            // 通过解算两组对角线轮速差获得旋转速度角速度，再代入计算线速度
+            chassis.wz = 0.5f * ((mec_br - mec_fl) / (_k_fl + _k_br) +
+                                 (mec_fr - mec_bl) / (_k_fr + _k_bl));
+
+            chassis.vx = 0.25f * (mec_fl + mec_fr + mec_bl + mec_br -
+                                  chassis.wz * (_k_br - _k_fl + _k_fr - _k_bl));
+
+            chassis.vy = 0.25f * (-mec_fl + mec_fr + mec_bl - mec_br -
+                                  chassis.wz * (_k_fr - _k_bl - _k_br + _k_fl));
+            break;
+    }
+
+    return chassis;
 }
 
 } // namespace pyro

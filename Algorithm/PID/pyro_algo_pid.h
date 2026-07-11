@@ -4,10 +4,11 @@
  *
  * This file defines the `pyro::pid_t` class, which encapsulates a
  * PID controller with various improvement options (e.g., filters, OLS).
- * It is a C++ refactor of the original C controller library.
+ * It is a C++ refactor of the original C controller library, with support
+ * for cascaded N-order low-pass filters.
  *
  * @author Wang Hongxi (Original C), Lucky (C++ Refactor)
- * @version 1.1.4
+ * @version 1.1.5
  * @date 2025-11-16
  * @copyright [Copyright Information Here]
  */
@@ -17,7 +18,7 @@
 
 #include "pyro_algo_ols.h" // For pyro::ols_t
 #include <cstdint>
-#include "cmath"
+#include <cmath>
 
 namespace pyro
 {
@@ -27,7 +28,7 @@ namespace pyro
  *
  * Encapsulates PID logic, state, and optional improvements.
  * Automatically uses `dwt_drv_t` for time delta and `ols_t` for
- * derivative calculation if specified.
+ * derivative calculation if specified. Supports N-order LPFs.
  */
 class pid_t
 {
@@ -72,6 +73,11 @@ class pid_t
      */
     using user_func_t = void (*)(pid_t *pid);
 
+    /**
+     * @brief Maximum supported order for the cascaded Low-Pass Filters.
+     */
+    static constexpr uint8_t MAX_LPF_ORDER = 4;
+
     // --- Constructors (Overloaded) ---
 
     /**
@@ -87,21 +93,22 @@ class pid_t
           uint8_t improve = INTEGRAL_LIMIT);
 
     /**
-     * @brief Constructor 2: PID with filters and OLS.
+     * @brief Constructor 2: PID with cascaded filters and OLS.
      * @param kp Proportional gain.
      * @param ki Integral gain.
      * @param kd Derivative gain.
      * @param integral_limit Max absolute value of the integral term.
      * @param max_out Max absolute value of the final output.
      * @param output_cutoff_hz Cutoff frequency (Hz) for the output LPF.
-     * (Set to 0 to disable).
+     * @param output_lpf_order Order of the output LPF (1 to MAX_LPF_ORDER).
      * @param derivative_cutoff_hz Cutoff frequency (Hz) for the derivative LPF.
-     * (Set to 0 to disable).
+     * @param derivative_lpf_order Order of the derivative LPF (1 to MAX_LPF_ORDER).
      * @param ols_order Order (sample count) for the OLS derivative.
      * @param improve Bitmask of improvement_t flags.
      */
     pid_t(float kp, float ki, float kd, float integral_limit, float max_out,
-          float output_cutoff_hz, float derivative_cutoff_hz,
+          float output_cutoff_hz, uint8_t output_lpf_order,
+          float derivative_cutoff_hz, uint8_t derivative_lpf_order,
           uint16_t ols_order,
           uint8_t improve = INTEGRAL_LIMIT | OUTPUT_FILTER | DERIVATIVE_FILTER);
 
@@ -109,17 +116,16 @@ class pid_t
      * @brief Constructor 3: Full-featured (Main Constructor).
      * @param max_out Max absolute value of the final output.
      * @param integral_limit Max absolute value of the integral term.
-     * @param deadband Error deadband; PID calculation is skipped if
-     * |error| < deadband.
+     * @param deadband Error deadband; PID calculation is skipped if |error| < deadband.
      * @param kp Proportional gain.
      * @param ki Integral gain.
      * @param kd Derivative gain.
      * @param A CoefA for ChangingIntegrationRate.
      * @param B CoefB for ChangingIntegrationRate.
      * @param output_cutoff_hz Cutoff frequency (Hz) for the output LPF.
-     * (Set to 0 to disable).
+     * @param output_lpf_order Order of the output LPF (1 to MAX_LPF_ORDER).
      * @param derivative_cutoff_hz Cutoff frequency (Hz) for the derivative LPF.
-     * (Set to 0 to disable).
+     * @param derivative_lpf_order Order of the derivative LPF (1 to MAX_LPF_ORDER).
      * @param ols_order Order (sample count) for the OLS derivative.
      * @param improve Bitmask of improvement_t flags.
      */
@@ -127,7 +133,8 @@ class pid_t
           float ki, float kd,
           float A, // CoefA for ChangingIntegrationRate
           float B, // CoefB for ChangingIntegrationRate
-          float output_cutoff_hz, float derivative_cutoff_hz,
+          float output_cutoff_hz, uint8_t output_lpf_order,
+          float derivative_cutoff_hz, uint8_t derivative_lpf_order,
           uint16_t ols_order, uint8_t improve);
 
     /**
@@ -139,7 +146,7 @@ class pid_t
     float calculate(float ref, float measure);
 
     /**
-     * @brief Clears the internal PID state (I-term, D-term, error, etc.).
+     * @brief Clears the internal PID state (I-term, D-term, error, filters, etc.).
      */
     void clear();
 
@@ -202,6 +209,8 @@ class pid_t
     float _coef_a, _coef_b;            ///< ChangingIntegrationRate params
     float _output_lpf_rc;              ///< Output LPF RC time constant
     float _derivative_lpf_rc;          ///< Derivative LPF RC time constant
+    uint8_t _output_lpf_order;         ///< Output LPF order
+    uint8_t _derivative_lpf_order;     ///< Derivative LPF order
     uint16_t _ols_order;               ///< OLS filter order
     uint8_t _improve;                  ///< Improvement flags bitmask
     error_handler_t _error_handler{};  ///< Error handler state
@@ -216,12 +225,14 @@ class pid_t
     float _p_out            = 0.0f; ///< Proportional term output
     float _i_out            = 0.0f; ///< Integral term output (accumulated)
     float _d_out            = 0.0f; ///< Derivative term output
-    float _i_term       = 0.0f; ///< Current frame's integral term (pre-limit)
-    float _last_i_term  = 0.0f; ///< Last frame's integral term
-    float _output       = 0.0f; ///< Final PID output
-    float _last_output  = 0.0f; ///< Final output from the previous cycle
-    float _last_d_out   = 0.0f; ///< D-term output from the previous cycle
-    float _last_measure = 0.0f; ///< Measured value from the previous cycle
+    float _i_term           = 0.0f; ///< Current frame's integral term (pre-limit)
+    float _last_i_term      = 0.0f; ///< Last frame's integral term
+    float _output           = 0.0f; ///< Final PID output
+    float _last_measure     = 0.0f; ///< Measured value from the previous cycle
+
+    // Filter Cascaded States
+    float _out_lpf_state[MAX_LPF_ORDER]{}; ///< Cascaded states for output filter
+    float _d_lpf_state[MAX_LPF_ORDER]{};   ///< Cascaded states for derivative filter
 
     // Dependencies
     uint32_t _dwt_cnt   = 0;    ///< Counter for DWT delta-time calculation

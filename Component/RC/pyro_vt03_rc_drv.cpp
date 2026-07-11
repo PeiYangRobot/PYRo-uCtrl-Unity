@@ -2,7 +2,6 @@
 #include "pyro_bsp_uart.h"
 #include "pyro_crc.h"
 
-#ifdef VT03_UART
 
 namespace pyro
 {
@@ -48,9 +47,9 @@ void vt03_drv_t::unpack(const uint8_t *buf)
             static_cast<float>(vt03_buf->ch0 - VT03_CH_VALUE_OFFSET) / 660.0f;
         shared_v_rc.axes.ry =
             static_cast<float>(vt03_buf->ch1 - VT03_CH_VALUE_OFFSET) / 660.0f;
-        shared_v_rc.axes.lx =
-            static_cast<float>(vt03_buf->ch2 - VT03_CH_VALUE_OFFSET) / 660.0f;
         shared_v_rc.axes.ly =
+            static_cast<float>(vt03_buf->ch2 - VT03_CH_VALUE_OFFSET) / 660.0f;
+        shared_v_rc.axes.lx =
             static_cast<float>(vt03_buf->ch3 - VT03_CH_VALUE_OFFSET) / 660.0f;
         shared_v_rc.axes.wheel =
             static_cast<float>(vt03_buf->wheel - VT03_CH_VALUE_OFFSET) / 660.0f;
@@ -103,4 +102,3 @@ void vt03_drv_t::unpack(const uint8_t *buf)
     }
 }
 } // namespace pyro
-#endif

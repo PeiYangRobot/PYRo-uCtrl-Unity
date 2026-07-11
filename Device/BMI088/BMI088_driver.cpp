@@ -106,25 +106,25 @@ static uint8_t write_BMI088_gyro_reg_data_error[BMI088_WRITE_GYRO_REG_NUM][3] =
 
 };
 
-static void Calibrate_MPU_Offset(IMU_Data_t *bmi088);
+static void Calibrate_MPU_Offset(const bmi088_config_t *config, IMU_Data_t *bmi088);
 
 
 
-uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, uint8_t calibrate, IMU_Data_t* imu_data)
+uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, const bmi088_config_t *config, IMU_Data_t* imu_data)
 {
     BMI088_SPI = bmi088_SPI;
     error = BMI088_NO_ERROR;
 
     error |= bmi088_accel_init();
     error |= bmi088_gyro_init();
-    if (calibrate)
-        Calibrate_MPU_Offset(imu_data);
+    if (config->calibrate)
+        Calibrate_MPU_Offset(config, imu_data);
     else
     {
-        imu_data->GyroOffset[0] = GxOFFSET;
-        imu_data->GyroOffset[1] = GyOFFSET;
-        imu_data->GyroOffset[2] = GzOFFSET;
-        imu_data->gNorm = gNORM;
+        imu_data->GyroOffset[0] = config->gx_offset;
+        imu_data->GyroOffset[1] = config->gy_offset;
+        imu_data->GyroOffset[2] = config->gz_offset;
+        imu_data->gNorm = config->g_norm;
         imu_data->AccelScale = 9.81f / imu_data->gNorm;
         imu_data->TempWhenCali = 40;
     }
@@ -133,7 +133,7 @@ uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, uint8_t calibrate, IMU_Data_t
 }
 
 //Ð£×¼ÁãÆ¯
-void Calibrate_MPU_Offset(IMU_Data_t *bmi088)
+void Calibrate_MPU_Offset(const bmi088_config_t *config, IMU_Data_t *bmi088)
 {
     static float startTime;
     static uint16_t CaliTimes = 6000; 
@@ -148,10 +148,10 @@ void Calibrate_MPU_Offset(IMU_Data_t *bmi088)
         if (pyro::dwt_drv_t::get_timeline_s() - startTime > 10)
         {
             //????
-            bmi088->GyroOffset[0] = GxOFFSET;
-            bmi088->GyroOffset[1] = GyOFFSET;
-            bmi088->GyroOffset[2] = GzOFFSET;
-            bmi088->gNorm = gNORM;
+            bmi088->GyroOffset[0] = config->gx_offset;
+            bmi088->GyroOffset[1] = config->gy_offset;
+            bmi088->GyroOffset[2] = config->gz_offset;
+            bmi088->gNorm = config->g_norm;
             bmi088->TempWhenCali = 40;
             break;
         }

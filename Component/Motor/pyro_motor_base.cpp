@@ -2,11 +2,11 @@
 
 namespace pyro
 {
-motor_base_t::motor_base_t(can_hub_t::which_can which)
+motor_base_t::motor_base_t(bsp_can::which_can which)
     : _which_can(which), _enable(false), _temperature(0), _current_position(0),
       _current_rotate(0), _current_torque(0)
 {
-    _can_drv = can_hub_t::get_instance()->hub_get_can_obj(which);
+    _can_drv = bsp_can::get_can(which);
 }
 
 motor_base_t::~motor_base_t()

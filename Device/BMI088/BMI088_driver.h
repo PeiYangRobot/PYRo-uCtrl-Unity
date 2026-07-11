@@ -32,75 +32,7 @@
 #define BMI088_GYRO_250_SEN 0.00013315805450396191230191732547673f
 #define BMI088_GYRO_125_SEN 0.000066579027251980956150958662738366f
 
-// Calibration values for different IDs
-#if ROBOT_ID == TEST_ROBOT_ID
-#define GxOFFSET 0.00354574085f
-#define GyOFFSET -0.00186899537f
-#define GzOFFSET -0.00250086933f
-#define gNORM 9.79719925f
-#elif ROBOT_ID == HERO_ID
-#define GxOFFSET 0.00409313058f
-#define GyOFFSET 0.00557280937f
-#define GzOFFSET 0.00271143788f
-#define gNORM 9.72361851f
-#elif ROBOT_ID == SUB_HERO_ID
-#if BOARD_ID == CHASSIS_ID
-#define GxOFFSET (-0.000977554359f)
-#define GyOFFSET (-0.00342695904f)
-#define GzOFFSET 0.0015946941f
-#define gNORM 9.78534603f
-#elif BOARD_ID == GIMBAL_ID
-#define GxOFFSET (0.00305748056f)
-#define GyOFFSET (-0.00471810065f)
-#define GzOFFSET (0.000485227822f)
-#define gNORM 9.99413967f
-#endif
-#elif ROBOT_ID == ENGINEER_ID
-#define GxOFFSET 0.00247530174f
-#define GyOFFSET 0.000393082853f
-#define GzOFFSET 0.000393082853f
-#define gNORM 9.69293118f
-#elif ROBOT_ID == SUB_ENGINEER_ID
-#define GxOFFSET 0.00247530174f
-#define GyOFFSET 0.000393082853f
-#define GzOFFSET 0.000393082853f
-#define gNORM 9.69293118f
-#elif ROBOT_ID == INFANTRY1_ID
-#define GxOFFSET 0.00247530174f
-#define GyOFFSET 0.000393082853f
-#define GzOFFSET 0.000393082853f
-#define gNORM 9.69293118f
-#elif ROBOT_ID == INFANTRY2_ID
-#define GxOFFSET 0.00275493739f
-#define GyOFFSET 0.000510261336f
-#define GzOFFSET 0.00282844482f
-#define gNORM 9.83213902f
-#elif ROBOT_ID == SUB_INFANTRY_ID
-#define GxOFFSET 0.00247530174f
-#define GyOFFSET 0.000393082853f
-#define GzOFFSET 0.000393082853f
-#define gNORM 9.69293118f
-#elif ROBOT_ID == SENTRY_ID
-#define GxOFFSET 0.00208240002f
-#define GyOFFSET 0.00100649369f
-#define GzOFFSET -0.00206660107f
-#define gNORM 9.78384113f
-#elif ROBOT_ID == SUB_SENTRY_ID
-#define GxOFFSET 0.00247530174f
-#define GyOFFSET 0.000393082853f
-#define GzOFFSET 0.000393082853f
-#define gNORM 9.69293118f
-#elif ROBOT_ID == UAV_ID
-#define GxOFFSET 0.00247530174f
-#define GyOFFSET 0.000393082853f
-#define GzOFFSET 0.000393082853f
-#define gNORM 9.69293118f
-#elif ROBOT_ID == DARTS_ID
-#define GxOFFSET 0.00247530174f
-#define GyOFFSET 0.000393082853f
-#define GzOFFSET 0.000393082853f
-#define gNORM 9.69293118f
-#endif
+
 
 
 typedef struct
@@ -140,7 +72,16 @@ enum
     BMI088_NO_SENSOR = 0xFF,
 };
 
-extern uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, uint8_t calibrate, IMU_Data_t* imu_data);
+typedef struct
+{
+    uint8_t calibrate;
+    float gx_offset;
+    float gy_offset;
+    float gz_offset;
+    float g_norm;
+} bmi088_config_t;
+
+extern uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, const bmi088_config_t *config, IMU_Data_t* imu_data);
 extern uint8_t bmi088_accel_init(void);
 extern uint8_t bmi088_gyro_init(void);
 

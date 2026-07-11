@@ -19,9 +19,9 @@ class dji_motor_tx_frame_t
         id_7,
         id_8
     };
-    using _frame_key_t = std::pair<uint32_t, can_hub_t::which_can>;
+    using _frame_key_t = std::pair<uint32_t, bsp_can::which_can>;
 
-    dji_motor_tx_frame_t(can_hub_t::which_can which, uint32_t id);
+    dji_motor_tx_frame_t(bsp_can::which_can which, uint32_t id);
     ~dji_motor_tx_frame_t();
 
     const _frame_key_t &get_key(void);
@@ -43,7 +43,7 @@ class dji_motor_tx_frame_pool_t
 {
   public:
     static dji_motor_tx_frame_pool_t *get_instance(void);
-    dji_motor_tx_frame_t *get_frame(can_hub_t::which_can which,
+    dji_motor_tx_frame_t *get_frame(bsp_can::which_can which,
                                     uint32_t id);
 
   private:
@@ -59,7 +59,7 @@ class dji_motor_drv_t : public motor_base_t
 {
   public:
     dji_motor_drv_t(dji_motor_tx_frame_t::register_id_t id,
-                    can_hub_t::which_can which);
+                    bsp_can::which_can which);
     ~dji_motor_drv_t() = default;
 
     status_t enable() override;
@@ -86,7 +86,7 @@ class dji_m3508_motor_drv_t : public dji_motor_drv_t
     static constexpr float reduction_ratio_14 = 13.77f;
     static constexpr float reciprocal_reduction_ratio_14 =  1 / reduction_ratio_14;
     dji_m3508_motor_drv_t(pyro::dji_motor_tx_frame_t::register_id_t id,
-                          can_hub_t::which_can which);
+                          bsp_can::which_can which);
     ~dji_m3508_motor_drv_t()
     {
     }
@@ -96,7 +96,7 @@ class dji_m2006_motor_drv_t : public dji_motor_drv_t
 {
   public:
     dji_m2006_motor_drv_t(pyro::dji_motor_tx_frame_t::register_id_t id,
-                          can_hub_t::which_can which);
+                          bsp_can::which_can which);
     ~dji_m2006_motor_drv_t()
     {
     }
@@ -105,7 +105,7 @@ class dji_gm_6020_motor_drv_t : public dji_motor_drv_t
 {
   public:
     dji_gm_6020_motor_drv_t(pyro::dji_motor_tx_frame_t::register_id_t id,
-                            can_hub_t::which_can which);
+                            bsp_can::which_can which);
     ~dji_gm_6020_motor_drv_t()
     {
     }

@@ -36,7 +36,7 @@ static size_t xBlockAllocatedBit = 0;
 
 #ifndef configTOTAL_DMA_HEAP_SIZE
 	/* 默认 DMA 堆大小为 0（不可用），如果需要使用请定义一个合理值 */
-	#define configTOTAL_DMA_HEAP_SIZE 16384
+	#define configTOTAL_DMA_HEAP_SIZE 24576
 #endif
 
 #if( configTOTAL_DMA_HEAP_SIZE > 0 )

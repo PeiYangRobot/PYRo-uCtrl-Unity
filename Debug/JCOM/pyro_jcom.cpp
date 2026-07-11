@@ -3,8 +3,9 @@
 #include "task.h"
 #include "cstring"
 #include "pyro_bsp_uart.h"
+#include "../../../Robot/Hero/Chassis/pyro_hybrid_chassis.h"
 
-
+extern pyro::hybrid_chassis_t *hybrid_chassis_ptr;
 
 namespace pyro
 {
@@ -24,15 +25,14 @@ jcom_drv_t::~jcom_drv_t()
     }
 }
 
+#ifdef JCOM_DEBUG_PORT
 jcom_drv_t &jcom_drv_t::get_instance(uint8_t max_length)
 {
-#ifdef JCOM_DEBUG_PORT
     static jcom_drv_t instance(
         max_length, &JCOM_DEBUG_PORT);
     return instance;
-#endif
-
 }
+#endif
 
 void jcom_drv_t::init()
 {
@@ -97,11 +97,14 @@ void jcom_drv_t::send()
 
 void jcom_drv_t::thread()
 {
+    add_data(&hybrid_chassis_ptr->_ctx.data.total_predicted_power);
+    add_data(&hybrid_chassis_ptr->_ctx.data.buf_energy);
+
     while (true)
     {
         update_data();
         send();
-        vTaskDelay(1);
+        vTaskDelay(3);
     }
 }
 
@@ -113,5 +116,5 @@ extern "C" void pyro_jcom_task(void *arg)
     pyro::jcom_drv_t &jcom = pyro::jcom_drv_t::get_instance(15);
     jcom.thread();
 #endif
-
+    vTaskDelete(nullptr);
 }

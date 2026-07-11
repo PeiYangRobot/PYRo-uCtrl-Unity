@@ -3,7 +3,7 @@
 
 #include "cmsis_os.h"
 #include "main.h"
-#include "pyro_can_drv.h"
+#include "pyro_bsp_can.h"
 #include "pyro_core_def.h"
 #include <cstdint>
 
@@ -17,7 +17,7 @@ namespace pyro
 class motor_base_t
 {
   public:
-    motor_base_t(can_hub_t::which_can which);
+    motor_base_t(bsp_can::which_can which);
     virtual ~motor_base_t(void);//先不实现
 
     virtual status_t enable()        = 0;
@@ -35,7 +35,7 @@ class motor_base_t
     bool is_online(void);
 
   protected:
-    can_hub_t::which_can _which_can;
+    bsp_can::which_can _which_can;
     can_drv_t *_can_drv;
 
     bool _enable;

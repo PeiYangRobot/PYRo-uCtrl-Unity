@@ -37,9 +37,9 @@ namespace pyro {
  * initializes the data update flag to true, and clears the latest data structure.
  *
  * @param can_id CAN node ID of the power meter device
- * @param which CAN bus channel to use (enumeration value of can_hub_t::which_can)
+ * @param which CAN bus channel to use (enumeration value of bsp_can::which_can)
  */
- powermeter_drv_t::powermeter_drv_t(uint32_t can_id, can_hub_t::which_can which)
+ powermeter_drv_t::powermeter_drv_t(uint32_t can_id, bsp_can::which_can which)
     : _can_id(can_id),
       _which(which),
       _can_drv(nullptr),
@@ -79,12 +79,7 @@ namespace pyro {
  */
  status_t powermeter_drv_t::init() 
 {
-    can_hub_t* can_hub = can_hub_t::get_instance();
-    if (can_hub  == nullptr) {
-        return PYRO_ERROR;
-    }
-
-    _can_drv = can_hub->hub_get_can_obj(_which);
+    _can_drv = bsp_can::get_can(_which);
     if (_can_drv == nullptr) {
         return PYRO_ERROR;
     }

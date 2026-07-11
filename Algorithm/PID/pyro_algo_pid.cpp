@@ -3,10 +3,10 @@
  * @brief Implementation file for the PYRO C++ PID Controller class.
  *
  * This file implements the `pyro::pid_t` methods, including constructors
- * and the main PID calculation logic.
+ * and the main PID calculation logic, integrating N-order cascaded LPFs.
  *
  * @author Wang Hongxi (Original C), Lucky (C++ Refactor)
- * @version 1.1.4
+ * @version 1.1.5
  * @date 2025-11-16
  * @copyright [Copyright Information Here]
  */
@@ -16,6 +16,7 @@
 #include "pyro_core_def.h"
 #include "pyro_dwt_drv.h" // For pyro::dwt_drv_t
 #include <cmath>          // For std::fabs
+#include <algorithm>      // For std::clamp
 
 namespace pyro
 {
@@ -32,7 +33,8 @@ pid_t::pid_t(const float kp, const float ki, const float kd,
             0.0f,           // deadband
             kp, ki, kd,     // Kp, Ki, Kd
             0.0f, 0.0f,     // A, B (ChangingIntegrationRate)
-            0.0f, 0.0f,     // output_cutoff_hz, derivative_cutoff_hz
+            0.0f, 1,        // output_cutoff_hz, output_lpf_order
+            0.0f, 1,        // derivative_cutoff_hz, derivative_lpf_order
             0,              // ols_order
             improve)        // improve
 {
@@ -44,18 +46,21 @@ pid_t::pid_t(const float kp, const float ki, const float kd,
  */
 pid_t::pid_t(const float kp, const float ki, const float kd,
              const float integral_limit, const float max_out,
-             const float output_cutoff_hz, const float derivative_cutoff_hz,
+             const float output_cutoff_hz, const uint8_t output_lpf_order,
+             const float derivative_cutoff_hz, const uint8_t derivative_lpf_order,
              const uint16_t ols_order,
              const uint8_t improve)
-    : pid_t(max_out,           // max_out
-            integral_limit,    // integral_limit
-            0.0f,              // deadband
-            kp, ki, kd,        // Kp, Ki, Kd
-            0.0f, 0.0f,        // A, B (ChangingIntegrationRate)
-            output_cutoff_hz,     // output_cutoff_hz
-            derivative_cutoff_hz, // derivative_cutoff_hz
-            ols_order,         // ols_order
-            improve)           // improve
+    : pid_t(max_out,               // max_out
+            integral_limit,        // integral_limit
+            0.0f,                  // deadband
+            kp, ki, kd,            // Kp, Ki, Kd
+            0.0f, 0.0f,            // A, B (ChangingIntegrationRate)
+            output_cutoff_hz,      // output_cutoff_hz
+            output_lpf_order,      // output_lpf_order
+            derivative_cutoff_hz,  // derivative_cutoff_hz
+            derivative_lpf_order,  // derivative_lpf_order
+            ols_order,             // ols_order
+            improve)               // improve
 {
     // All work done by delegation
 }
@@ -66,14 +71,15 @@ pid_t::pid_t(const float kp, const float ki, const float kd,
 pid_t::pid_t(const float max_out, const float integral_limit,
              const float deadband, const float kp, const float ki,
              const float kd, const float A, const float B,
-             const float output_cutoff_hz, const float derivative_cutoff_hz,
+             const float output_cutoff_hz, const uint8_t output_lpf_order,
+             const float derivative_cutoff_hz, const uint8_t derivative_lpf_order,
              const uint16_t ols_order,
              const uint8_t improve)
     : // --- C++ Member Initializer List ---
       _kp(kp), _ki(ki), _kd(kd), _max_out(max_out),
       _integral_limit(integral_limit), _deadband(deadband), _coef_a(A),
       _coef_b(B),
-      // --- MODIFICATION: Calculate RC constant from Hz ---
+      // --- Calculate RC constant from Hz ---
       // If cutoff_hz <= 0, set RC to 0.0f (disabling the filter)
       _output_lpf_rc((output_cutoff_hz > 0.0f)
                          ? (1.0f / (2.0f * PI * output_cutoff_hz))
@@ -81,7 +87,9 @@ pid_t::pid_t(const float max_out, const float integral_limit,
       _derivative_lpf_rc((derivative_cutoff_hz > 0.0f)
                              ? (1.0f / (2.0f * PI * derivative_cutoff_hz))
                              : 0.0f),
-      // --- End Modification ---
+      // Ensure filter orders are constrained to valid limits [1, MAX_LPF_ORDER]
+      _output_lpf_order(std::clamp(output_lpf_order, (uint8_t)1, MAX_LPF_ORDER)),
+      _derivative_lpf_order(std::clamp(derivative_lpf_order, (uint8_t)1, MAX_LPF_ORDER)),
       _ols_order(ols_order),
       _improve(improve), _ols(ols_order) // OLS instance is constructed here
 {
@@ -203,8 +211,6 @@ float pid_t::calculate(const float ref, const float measure)
 
     // --- Update 'Last' States ---
     _last_measure = _measure;
-    _last_output  = _output;
-    _last_d_out   = _d_out;
     _last_err     = _err;
     _last_i_term  = _i_term;
 
@@ -226,11 +232,17 @@ void pid_t::clear()
     _i_term       = 0.0f;
     _last_i_term  = 0.0f;
     _output       = 0.0f;
-    _last_output  = 0.0f;
-    _last_d_out   = 0.0f;
     _last_measure = 0.0f;
     _dwt_cnt      = 0; // Reset DWT counter
     _dt           = 0.0f;
+
+    // Clear filter arrays
+    for (uint8_t i = 0; i < MAX_LPF_ORDER; ++i)
+    {
+        _out_lpf_state[i] = 0.0f;
+        _d_lpf_state[i]   = 0.0f;
+    }
+
     // Note: _ols is not cleared, it contains the history
 }
 
@@ -324,33 +336,45 @@ void pid_t::limit_integral()
 }
 
 /**
- * @brief Applies a low-pass filter to the derivative term.
+ * @brief Applies an N-order cascaded low-pass filter to the derivative term.
  */
 void pid_t::filter_derivative()
 {
-    // Note: _derivative_lpf_rc is 0.0f if cutoff_hz <= 0
-    if (_derivative_lpf_rc > 0.0f)
+    if (_derivative_lpf_rc > 0.0f && _derivative_lpf_order > 0)
     {
-        _d_out = _d_out * _dt / (_derivative_lpf_rc + _dt) +
-                 _last_d_out * _derivative_lpf_rc / (_derivative_lpf_rc + _dt);
+        float alpha = _dt / (_derivative_lpf_rc + _dt);
+        float input = _d_out;
+
+        for (uint8_t i = 0; i < _derivative_lpf_order; ++i)
+        {
+            _d_lpf_state[i] = input * alpha + _d_lpf_state[i] * (1.0f - alpha);
+            input = _d_lpf_state[i];
+        }
+        _d_out = input;
     }
 }
 
 /**
- * @brief Applies a low-pass filter to the final output.
+ * @brief Applies an N-order cascaded low-pass filter to the final output.
  */
 void pid_t::filter_output()
 {
-    // Note: _output_lpf_rc is 0.0f if cutoff_hz <= 0
-    if (_output_lpf_rc > 0.0f)
+    if (_output_lpf_rc > 0.0f && _output_lpf_order > 0)
     {
-        _output = _output * _dt / (_output_lpf_rc + _dt) +
-                  _last_output * _output_lpf_rc / (_output_lpf_rc + _dt);
+        float alpha = _dt / (_output_lpf_rc + _dt);
+        float input = _output;
+
+        for (uint8_t i = 0; i < _output_lpf_order; ++i)
+        {
+            _out_lpf_state[i] = input * alpha + _out_lpf_state[i] * (1.0f - alpha);
+            input = _out_lpf_state[i];
+        }
+        _output = input;
     }
 }
 
 /**
- * @brief Clamps the final output to [-max_out, max_out].
+ * @brief Clamps the final output to [-max_out, max_out] and prevents filter windup.
  */
 void pid_t::limit_output()
 {
@@ -361,6 +385,12 @@ void pid_t::limit_output()
     else if (_output < -_max_out)
     {
         _output = -_max_out;
+    }
+
+    // Anti-windup for the cascaded output filter
+    if (_output_lpf_order > 0)
+    {
+        _out_lpf_state[_output_lpf_order - 1] = _output;
     }
 }
 
@@ -406,7 +436,6 @@ void pid_t::handle_error()
     {
         _error_handler.error_count = 0; // Ref is near zero, not stalled
     }
-
 
     if (_error_handler.error_count > 500)
     {

@@ -7,105 +7,9 @@ using namespace pyro;
 #define Y            1
 #define Z            2
 
-#define IMU_DIRECT_1 1
-#define IMU_DIRECT_2 2
-#define IMU_DIRECT_3 3
-#define IMU_DIRECT_4 4
-#define IMU_DIRECT_5 5
-#define IMU_DIRECT_6 6
-#define IMU_DIRECT_7 7
-#define IMU_DIRECT_8 8
 
-#if ROBOT_ID == TEST_ROBOT_ID
-#define IMU_DIRECT IMU_DIRECT_8
-#elif ROBOT_ID == HERO_ID
-#define IMU_DIRECT IMU_DIRECT_4
-#elif ROBOT_ID == SUB_HERO_ID
-#if BOARD_ID == CHASSIS_ID
-#define IMU_DIRECT IMU_DIRECT_4
-#elif BOARD_ID == GIMBAL_ID
-#define IMU_DIRECT IMU_DIRECT_4
-#endif
-#elif ROBOT_ID == ENGINEER_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#elif ROBOT_ID == SUB_ENGINEER_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#elif ROBOT_ID == INFANTRY1_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#elif ROBOT_ID == INFANTRY2_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#elif ROBOT_ID == SUB_INFANTRY_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#elif ROBOT_ID == SENTRY_ID
-#define IMU_DIRECT IMU_DIRECT_2
-#elif ROBOT_ID == SUB_SENTRY_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#elif ROBOT_ID == UAV_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#elif ROBOT_ID == DARTS_ID
-#define IMU_DIRECT IMU_DIRECT_1
-#endif
 
-#if IMU_DIRECT == IMU_DIRECT_1
-#define IMU_X 0
-#define IMU_Y 1
-#define IMU_Z 2
-#define X_DIR 0 // 0 means positive, 1 means negative
-#define Y_DIR 0
-#define Z_DIR 0
-#elif IMU_DIRECT == IMU_DIRECT_2
-#define IMU_X 1
-#define IMU_Y 0
-#define IMU_Z 2
-#define X_DIR 0 // 0 means positive, 1 means negative
-#define Y_DIR 1
-#define Z_DIR 0
-#elif IMU_DIRECT == IMU_DIRECT_3
-#define IMU_X 0
-#define IMU_Y 1
-#define IMU_Z 2
-#define X_DIR 1 // 0 means positive, 1 means negative
-#define Y_DIR 1
-#define Z_DIR 0
-#elif IMU_DIRECT == IMU_DIRECT_4
-#define IMU_X 1
-#define IMU_Y 0
-#define IMU_Z 2
-#define X_DIR 1 // 0 means positive, 1 means negative
-#define Y_DIR 0
-#define Z_DIR 0
-#elif IMU_DIRECT == IMU_DIRECT_5
-#define IMU_X 0
-#define IMU_Y 1
-#define IMU_Z 2
-#define X_DIR 0 // 0 means positive, 1 means negative
-#define Y_DIR 1
-#define Z_DIR 1
-#elif IMU_DIRECT == IMU_DIRECT_6
-#define IMU_X 1
-#define IMU_Y 0
-#define IMU_Z 2
-#define X_DIR 1 // 0 means positive, 1 means negative
-#define Y_DIR 1
-#define Z_DIR 1
-#elif IMU_DIRECT == IMU_DIRECT_7
-#define IMU_X 0
-#define IMU_Y 1
-#define IMU_Z 2
-#define X_DIR 1 // 0 means positive, 1 means negative
-#define Y_DIR 0
-#define Z_DIR 1
-#elif IMU_DIRECT == IMU_DIRECT_8
-#define IMU_X 1
-#define IMU_Y 0
-#define IMU_Z 2
-#define X_DIR 0 // 0 means positive, 1 means negative
-#define Y_DIR 0
-#define Z_DIR 1
-
-#endif
-
-IMU_Data_t *cimu_data;
+IMU_Data_t *g_imu_data;
 
 // Define static TaskHandle_t declared in pyro::ins_drv_t
 TaskHandle_t pyro::ins_drv_t::_ins_task_handle = nullptr;
@@ -116,10 +20,58 @@ ins_drv_t *ins_drv_t::get_instance(void)
     return &instance;
 }
 
-status_t ins_drv_t::init()
+
+
+status_t ins_drv_t::init(const ins_config_t &config)
 {
-    cimu_data = &imu_data;
-    for (uint16_t count = 0; BMI088_init(&hspi2, IMU_CALIBRATION_EN,
+    _config = config;
+
+    // 解析轴向方向映射
+    switch (_config.direct)
+    {
+        case ins_config_t::imu_direct_t::DIRECT_1:
+            _imu_x_idx = 0; _imu_y_idx = 1; _imu_z_idx = 2;
+            _x_neg = false; _y_neg = false; _z_neg = false;
+            break;
+        case ins_config_t::imu_direct_t::DIRECT_2:
+            _imu_x_idx = 1; _imu_y_idx = 0; _imu_z_idx = 2;
+            _x_neg = false; _y_neg = true;  _z_neg = false;
+            break;
+        case ins_config_t::imu_direct_t::DIRECT_3:
+            _imu_x_idx = 0; _imu_y_idx = 1; _imu_z_idx = 2;
+            _x_neg = true;  _y_neg = true;  _z_neg = false;
+            break;
+        case ins_config_t::imu_direct_t::DIRECT_4:
+            _imu_x_idx = 1; _imu_y_idx = 0; _imu_z_idx = 2;
+            _x_neg = true;  _y_neg = false; _z_neg = false;
+            break;
+        case ins_config_t::imu_direct_t::DIRECT_5:
+            _imu_x_idx = 0; _imu_y_idx = 1; _imu_z_idx = 2;
+            _x_neg = false; _y_neg = true;  _z_neg = true;
+            break;
+        case ins_config_t::imu_direct_t::DIRECT_6:
+            _imu_x_idx = 1; _imu_y_idx = 0; _imu_z_idx = 2;
+            _x_neg = true;  _y_neg = true;  _z_neg = true;
+            break;
+        case ins_config_t::imu_direct_t::DIRECT_7:
+            _imu_x_idx = 0; _imu_y_idx = 1; _imu_z_idx = 2;
+            _x_neg = true;  _y_neg = false; _z_neg = true;
+            break;
+        case ins_config_t::imu_direct_t::DIRECT_8:
+            _imu_x_idx = 1; _imu_y_idx = 0; _imu_z_idx = 2;
+            _x_neg = false; _y_neg = false; _z_neg = true;
+            break;
+    }
+
+    g_imu_data = &imu_data;
+    bmi088_config_t bmi_cfg;
+    bmi_cfg.calibrate = _config.calibrate ? 1 : 0;
+    bmi_cfg.gx_offset = _config.gx_offset;
+    bmi_cfg.gy_offset = _config.gy_offset;
+    bmi_cfg.gz_offset = _config.gz_offset;
+    bmi_cfg.g_norm = _config.g_norm;
+
+    for (uint16_t count = 0; BMI088_init(&hspi2, &bmi_cfg,
                                          &imu_data) != BMI088_NO_ERROR &&
                              count < 10;
          count++)
@@ -139,7 +91,7 @@ status_t ins_drv_t::init()
     {
         return PYRO_ERROR;
     }
-    if (IMU_CALIBRATION_EN)
+    if (_config.calibrate)
     {
         return PYRO_WARNING;
     }
@@ -154,42 +106,42 @@ void ins_drv_t::__static_ins_task(void *argument)
 void ins_drv_t::__ins_task()
 {
     _dwt_cnt = 0;
-    IMU_QuaternionEKF_Init(10, 0.001, 10000000, 0.9996, 0.03f);
+    IMU_QuaternionEKF_Init(10, 0.001, 10000000, 0.9996, 0.004f);
 
     while (1)
     {
         _dt = dwt_drv_t::get_delta_t(&_dwt_cnt);
         _t += _dt;
         BMI088_Read(&imu_data);
-        if (X_DIR)
+        if (_x_neg)
         {
-            _acc_b[X]  = -imu_data.Accel[IMU_X];
-            _gyro_b[X] = -imu_data.Gyro[IMU_X];
+            _acc_b[X]  = -imu_data.Accel[_imu_x_idx];
+            _gyro_b[X] = -imu_data.Gyro[_imu_x_idx];
         }
         else
         {
-            _acc_b[X]  = imu_data.Accel[IMU_X];
-            _gyro_b[X] = imu_data.Gyro[IMU_X];
+            _acc_b[X]  = imu_data.Accel[_imu_x_idx];
+            _gyro_b[X] = imu_data.Gyro[_imu_x_idx];
         }
-        if (Y_DIR)
+        if (_y_neg)
         {
-            _acc_b[Y]  = -imu_data.Accel[IMU_Y];
-            _gyro_b[Y] = -imu_data.Gyro[IMU_Y];
-        }
-        else
-        {
-            _acc_b[Y]  = imu_data.Accel[IMU_Y];
-            _gyro_b[Y] = imu_data.Gyro[IMU_Y];
-        }
-        if (Z_DIR)
-        {
-            _acc_b[Z]  = -imu_data.Accel[IMU_Z];
-            _gyro_b[Z] = -imu_data.Gyro[IMU_Z];
+            _acc_b[Y]  = -imu_data.Accel[_imu_y_idx];
+            _gyro_b[Y] = -imu_data.Gyro[_imu_y_idx];
         }
         else
         {
-            _acc_b[Z]  = imu_data.Accel[IMU_Z];
-            _gyro_b[Z] = imu_data.Gyro[IMU_Z];
+            _acc_b[Y]  = imu_data.Accel[_imu_y_idx];
+            _gyro_b[Y] = imu_data.Gyro[_imu_y_idx];
+        }
+        if (_z_neg)
+        {
+            _acc_b[Z]  = -imu_data.Accel[_imu_z_idx];
+            _gyro_b[Z] = -imu_data.Gyro[_imu_z_idx];
+        }
+        else
+        {
+            _acc_b[Z]  = imu_data.Accel[_imu_z_idx];
+            _gyro_b[Z] = imu_data.Gyro[_imu_z_idx];
         }
 
 

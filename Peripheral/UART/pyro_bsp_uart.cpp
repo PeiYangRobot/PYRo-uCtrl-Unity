@@ -19,7 +19,7 @@ namespace pyro
 
 uart_drv_t& bsp_uart::get_uart1()
 {
-    static uart_drv_t instance(&huart1, 256);
+    static uart_drv_t instance(&huart1, 512);
     return instance;
 }
 
@@ -33,13 +33,13 @@ uart_drv_t& bsp_uart::get_uart5()
 
 uart_drv_t& bsp_uart::get_uart7()
 {
-    static uart_drv_t instance(&huart7, 256);
+    static uart_drv_t instance(&huart7, 512);
     return instance;
 }
 
 uart_drv_t& bsp_uart::get_uart10()
 {
-    static uart_drv_t instance(&huart10, 256);
+    static uart_drv_t instance(&huart10, 512);
     return instance;
 }
 

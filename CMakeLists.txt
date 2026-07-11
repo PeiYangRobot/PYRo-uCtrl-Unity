@@ -31,6 +31,7 @@ target_sources(PYRo PRIVATE
 
         # --- Peripheral ---
         Peripheral/CAN/pyro_can_drv.cpp
+        Peripheral/CAN/pyro_bsp_can.cpp
         Peripheral/DWT/pyro_dwt_drv.cpp
         Peripheral/UART/pyro_uart_drv.cpp
         Peripheral/UART/pyro_bsp_uart.cpp
@@ -45,32 +46,32 @@ target_sources(PYRo PRIVATE
         Algorithm/EKF/QuaternionEKF.cpp
         Algorithm/KF/kalman_filter.cpp
         Algorithm/Common/pyro_algo_common.cpp
+        Algorithm/CRC/PYRo_crc.cpp
+        Algorithm/Powercontrol/pyro_power_control.cpp
+        Algorithm/Navigation/pyro_nav_hub.cpp
 
         # --- Component ---
-        Component/CRC/PYRo_crc.cpp
         Component/Motor/pyro_dji_motor_drv.cpp
         Component/Motor/pyro_dm_motor_drv.cpp
         Component/Motor/pyro_motor_base.cpp
-        Component/Powercontrol/pyro_power_control_drv.cpp
         Component/Powermeter/pyro_powermeter.cpp
         Component/RC/pyro_dr16_rc_drv.cpp
         Component/RC/pyro_rc_base_drv.cpp
         Component/RC/pyro_vt03_rc_drv.cpp
         Component/Referee/fifo.c
         Component/Referee/pyro_referee.cpp
+        Component/Image/pyro_image_drv.cpp
         Component/INS/pyro_ins.cpp
         Component/Supercap/pyro_supercap_drv.cpp
+        Component/SR/pyro_sonic_base_drv.cpp
+        Component/SR/pyro_sr04_drv.cpp
+        Component/SR/pyro_sr05_drv.cpp
+        Component/SR/pyro_us100_drv.cpp
+
         # --- Debug ---
         Debug/Debug_task.cpp
         Debug/JCOM/pyro_jcom.cpp
         Debug/VOFA/pyro_vofa.cpp
-
-
-        # --- Communication ---
-        Communication/pyro_com_cantx.cpp
-        Communication/pyro_com_canrx.cpp
-        Communication/pyro_uart_comm.cpp
-
 
         # --- Device ---
         Device/BMI088/BMI088_driver.cpp
@@ -109,25 +110,26 @@ target_include_directories(PYRo PUBLIC
         Algorithm/PID
         Algorithm/EKF
         Algorithm/KF
+        Algorithm/LESO
+        Algorithm/CRC
+        Algorithm/Powercontrol
+        Algorithm/Navigation
 
         # --- Component ---
-        Component/CRC
         Component/IMU
         Component/INS
         Component/Motor
-        Component/Powercontrol
         Component/Powermeter
         Component/RC
         Component/Referee
         Component/Referee/UI
         Component/Shoot
         Component/Supercap
+        Component/SR
+        Component/Image
 
         # --- Module ---
         Module
-
-        # --- Communication ---
-        Communication
 
         # --- Debug ---
         Debug/VOFA

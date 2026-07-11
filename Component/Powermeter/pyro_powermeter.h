@@ -22,7 +22,7 @@
 #ifndef __POWERMETER_H__
 #define __POWERMETER_H__
 
-#include "pyro_can_drv.h"
+#include "pyro_bsp_can.h"
 #include <array>
 
 namespace pyro {
@@ -70,9 +70,9 @@ public:
      * Initializes the power meter driver instance, sets the CAN device ID and bus channel.
      *
      * @param can_id CAN node ID of the power meter device
-     * @param which CAN bus channel to use (enumeration value of can_hub_t::which_can)
+     * @param which CAN bus channel to use (enumeration value of bsp_can::which_can)
      */
-    powermeter_drv_t(uint32_t can_id, can_hub_t::which_can which);
+    powermeter_drv_t(uint32_t can_id, bsp_can::which_can which);
 
     /**
      * @brief 析构函数
@@ -127,7 +127,7 @@ public:
 
 private:
     uint32_t _can_id;                      ///< 功率计设备CAN ID
-    can_hub_t::which_can _which;           ///< CAN总线通道
+    bsp_can::which_can _which;           ///< CAN总线通道
     can_drv_t* _can_drv;                   ///< CAN驱动实例指针
     can_msg_buffer_t* _msg_buffer;         ///< CAN消息缓冲区指针
     powermeter_data _latest_data;          ///< 最新解析的功率计数据

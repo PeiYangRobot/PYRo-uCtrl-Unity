@@ -20,7 +20,7 @@ virtual_rc_t& rc_drv_t::read()
 
 status_t rc_drv_t::rc_task_t::init()
 {
-    return _parent->task_init();
+    return _parent->task_init();//_parent是拥有这个任务对象的类，放在这里就是rc_drv_t
 }
 
 void rc_drv_t::rc_task_t::run_loop()
@@ -74,6 +74,7 @@ void rc_drv_t::disable()
     _rc_uart.remove_rx_event_callback(reinterpret_cast<uint32_t>(this));
 }
 
+__attribute__((section(".itcm_text")))
 bool rc_drv_t::rc_callback(const uint8_t *buf, const uint16_t len,
                            BaseType_t &xHigherPriorityTaskWoken)
 {

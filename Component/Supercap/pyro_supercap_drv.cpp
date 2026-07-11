@@ -42,14 +42,14 @@ void supercap_drv_t::supercap_task_t::run_loop()
 /* ========================================================================== */
 /* Driver Implementation                                                      */
 /* ========================================================================== */
-
+#ifdef SUPERCAP_UART
 /* instance ------------------------------------------------------------------*/
 supercap_drv_t *supercap_drv_t::get_instance()
 {
     static supercap_drv_t instance(&PYRO_UART7);
     return &instance;
 }
-
+#endif
 /* Constructor & Destructor --------------------------------------------------*/
 supercap_drv_t::supercap_drv_t(uart_drv_t *uart_handle)
     : _uart_drv(uart_handle), _task(nullptr), _tx_buffer(nullptr),
@@ -170,6 +170,7 @@ void supercap_drv_t::run_loop_impl()
 }
 
 /* ISR Callback --------------------------------------------------------------*/
+__attribute__((section(".itcm_text")))
 bool supercap_drv_t::rx_callback(const uint8_t *p_data, const uint16_t size,
                                  BaseType_t &xHigherPriorityTaskWoken) const
 {

@@ -51,10 +51,14 @@ struct cmd_base_t
  * @brief CRTP Template for Module Base.
  * 模块基类的 CRTP 模板。
  */
-template <typename Derived, typename CmdType, typename ModuleDeps>
+template <typename Derived, typename ModuleParams>
 class module_base_t
 {
   public:
+    using CmdType    = typename ModuleParams::CmdType;
+    using ModuleDeps = typename ModuleParams::ModuleDeps;
+    using ModuleCtx  = typename ModuleParams::ModuleCtx;
+
     static Derived *instance()
     {
         static Derived _instance_obj; // NOLINT
@@ -79,6 +83,7 @@ class module_base_t
 
 
     [[nodiscard]] mutex_t &get_mutex();
+    [[nodiscard]] const ModuleCtx &get_ctx() const;
 
   protected:
     explicit module_base_t(
@@ -100,6 +105,7 @@ class module_base_t
     CmdType _current_cmd;
 
     ModuleDeps _module_deps;
+    ModuleCtx _ctx;
 
   private:
     class module_task_t final : public task_base_t

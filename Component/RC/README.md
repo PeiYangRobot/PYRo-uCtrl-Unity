@@ -1,209 +1,248 @@
 # PYRo RC Driver
 
-**基于 FreeRTOS 与 PYRo UART Driver 的多协议遥控器驱动框架**
+**基于 FreeRTOS 任务通知与发布-订阅模式的遥控器驱动框架**
 
-该模块 (`pyro_rc_drv`) 采用工厂模式统一管理多种遥控协议（DR16, VT03，...）。它利用 FreeRTOS 消息缓冲区实现软硬解耦，通过全局位掩码实现多接收机优先级的动态仲裁，并提供基于时间戳的事件管理机制。
+该 `pyro_rc_drv` 模块采用事件驱动架构。通过统一的虚拟遥控器映射、状态机消抖以及泛型事件代理 (Broker)，提供多协议（如 DR16、VT03）的解析与事件分发功能。
 
 ---
 
 ## Part 1: 代码全解 (Code Deep Dive)
 
-### 1. 实例构建：工厂与隐式初始化
+### 1. 全局虚拟控制器映射与硬件差异
 
-系统通过 `rc_hub_t` 统一管理实例，用户无需手动管理内存或调用初始化函数。
-
-#### 1.1 懒加载与自动绑定
-
-在 `pyro_rc_hub.cpp` 中，利用 C++ 局部静态变量特性，实现了按需加载。
+框架将底层不同 UART 协议解析后的数据，统一映射至全局唯一的 `shared_v_rc` 虚拟控制器中。所有的模拟量（如摇杆、鼠标）和离散量（如按键、拨杆）由 `virtual_rc_t` 结构体集中管理。
 
 ```C++
-/* pyro_rc_hub.cpp */
-rc_drv_t *rc_hub_t::get_instance(which_rc_t which_rc)
+// pyro_virtual_rc.h
+struct virtual_rc_t
 {
+    struct { float lx, ly, rx, ry; float wheel; } axes{};
+    struct { float x, y, z; } mouse_axes{};
+    struct { tiny_switch_t left; tiny_switch_t right; tiny_switch_t gear; } switches;
+    struct { tiny_button_t trigger, fn_l, fn_r, pause; ... } buttons;
+    struct { tiny_button_t w, s, a, d; ... } keys;
     // ...
-    // 1. 自动获取底层 UART 驱动 (硬件绑定)
-    static uart_drv_t *vt03_uart = uart_drv_t::get_instance(...);
-    // 2. 构造驱动实例 (仅首次调用时执行，自动调用 init)
-    static vt03_drv_t vt03_rc_drv(vt03_uart);
-    return &vt03_rc_drv;
+};
+```
+
+**需要注意的是，底层硬件的物理差异仍然存在：**
+虽然应用层通过 `pyro::rc_drv_t::read()` 获取的是同一套标准化数据结构，但不同遥控器实际映射的字段不同。例如，DR16 拥有左/右拨杆，而没有 `gear` 挡位；VT03 则拥有 `gear` 挡位，而没有独立的左右拨杆。
+
+```C++
+// DR16 映射逻辑 (pyro_dr16_rc_drv.cpp)
+shared_v_rc.switches.right.update(map_sw(dr16_buf->s1));
+shared_v_rc.switches.left.update(map_sw(dr16_buf->s2));
+
+// VT03 映射逻辑 (pyro_vt03_rc_drv.cpp)
+shared_v_rc.switches.gear.update(map_gear(vt03_buf->gear));
+```
+
+在上层使用时，可通过 `check_online` 接口判定遥控器是否在线。
+
+```C++
+// 检测VT03是否在线
+if (vt03_drv_t::instance().check_online())  
+{  
+    booster_vt032cmd(notify_val);  
+}  
+// 检测DR16是否在线
+else if (dr16_drv_t::instance().check_online())  
+{  
+    booster_dr162cmd(notify_val);  
 }
 ```
 
-- **解读**：只有当首次调用 `get_instance` 时，驱动对象才会被创建。构造函数内部会自动申请 FreeRTOS 任务与缓冲区资源，因此获取即就绪。
-    
+### 2. 遥控器优先级与抢占式调度策略
 
-### 2. 连接控制：物理链路的挂载与切断
+在多遥控器同时接入的场景下，框架在底层串口接收回调中实现了基于位操作的抢占式调度逻辑。每个遥控器在初始化时会被赋予一个优先级位 (`priority_bit`)，数值越小优先级越高。
 
-`enable` 和 `disable` 并非简单的标志位切换，而是直接操作底层 UART 的中断回调链表。
-
-#### 2.1 建立连接 (`enable`)
+例如，VT03 的优先级位为 0（高优先级），DR16 的优先级位为 1（次高优先级）：
 
 ```C++
-/* pyro_vt03_rc_drv.cpp */
-void vt03_drv_t::enable() {
-    // 向 UART 驱动注册 ISR 回调，物理接通数据流
-    _rc_uart->add_rx_event_callback(
-        [this](...) { return rc_callback(...); }, 
-        reinterpret_cast<uint32_t>(this)
-    );
-}
+// VT03 初始化，优先级位设为 0 (pyro_vt03_rc_drv.cpp)
+vt03_drv_t::vt03_drv_t(uart_drv_t &vt03_uart)
+    : rc_drv_t(vt03_uart, "vt03_task", 0, sizeof(vt03_buf_t)) {}
+
+// DR16 初始化，优先级位设为 1 (pyro_dr16_rc_drv.cpp)
+dr16_drv_t::dr16_drv_t(uart_drv_t &dr16_uart)
+    : rc_drv_t(dr16_uart, "dr16_task", 1, sizeof(dr16_buf_t)) {}
 ```
 
-- **实质**：将驱动的接收函数挂载到uart驱动回调向量表中。此前 UART 中断会忽略该数据，接收函数用遥控器的帧特征（如长度/帧头等）检测硬件收到的消息是否是遥控器的数据，如不是，则返回false，是则返回bool（此部分具体参考串口文档）
+框架通过一个全局的静态变量 `sequence` 来记录当前所有在线的遥控器状态。在 UART 接收中断 (`rc_callback`) 中，系统会通过 `__builtin_ctz(sequence)` 快速计算出当前在线的最高优先级设备的位号。
 
-#### 2.2 断开连接 (`disable`)
-
-```C++
-void vt03_drv_t::disable() {
-    // 1. 立即清除在线状态位 (原子操作) -> 释放仲裁锁
-    sequence &= ~(1 << _priority);
-    // 2. 从 UART 驱动移除回调 -> 物理断开
-    _rc_uart->remove_rx_event_callback(...);
-}
-```
-
-- **实质**：除了停止接收，最关键的是**立即释放优先权**。若此时有低优先级设备（如 DR16）在线，它将即刻接管控制权。
-    
-
-### 3. 中断仲裁：抢占式过滤
-
-在 UART 中断回调 (`rc_callback`) 中，驱动执行核心的优先级仲裁。
+如果接收到的数据包来自低优先级设备，而高优先级设备当前处于在线状态，该数据包将在中断层被直接丢弃，不会发送至消息缓冲区：
 
 ```C++
-/* pyro_vt03_rc_drv.cpp */
-bool vt03_drv_t::rc_callback(...) {
-    // __builtin_ctz(sequence): 获取当前活跃的最高优先级
-    // 规则：仅当 本驱动优先级 <= 当前系统最高优先级 时，才允许通过
-    if (__builtin_ctz(sequence) >= _priority) {
-        xMessageBufferSendFromISR(...); // 推入缓冲区
-        return true;
+// 串口接收中断回调逻辑 (pyro_rc_base_drv.cpp)
+bool rc_drv_t::rc_callback(const uint8_t *buf, const uint16_t len, BaseType_t &xHigherPriorityTaskWoken)
+{
+    if (len == _frame_len && check_packet(buf))
+    {
+        // 比较当前设备的优先级与全局最高在线优先级
+        if (__builtin_ctz(sequence) >= _priority_bit)
+        {
+            xMessageBufferSendFromISR(_rc_msg_buffer, buf, len, &xHigherPriorityTaskWoken);
+            return true;
+        }
     }
     return false;
 }
 ```
+通过这种机制，当高优先级遥控器（如 VT03）上线后，会自动屏蔽低优先级遥控器（如 DR16）的数据流输入，确保控制权的唯一性与安全性。
 
-- **解读**：若高优先级设备（VT03, Prio 0）在线，低优先级设备（DR16, Prio 1）的数据会在中断层被直接丢弃，不消耗任务层资源。
-    
+### 3. 内部任务代理与线程安全
 
-### 4. 线程逻辑：离线与在线的自动切换
-
-处理任务 (`thread`) 采用状态机机制，适配遥控器 **14ms** 的发送周期。
-
-#### 4.1 阶段一：离线等待 (Wait)
+基类 `rc_drv_t` 的任务生命周期管理通过私有内部类 `rc_task_t` 实现，对外隐藏了任务基类的接口。
 
 ```C++
-/* pyro_vt03_rc_drv.cpp */
-// 使用 portMAX_DELAY 永久阻塞，不消耗 CPU
-if (xMessageBufferReceive(..., portMAX_DELAY) == sizeof(vt03_buf_t)) {
-    // 收到第一帧数据 -> 标记上线
-    sequence |= (1 << _priority);
+// pyro_rc_base_drv.h
+class rc_drv_t
+{
+  private:
+    class rc_task_t : public task_base_t {
+      protected:
+        status_t init() override;
+        void run_loop() override;
+      // ...
+    };
+    rc_task_t _task; // 包含一个任务实体，代理运行逻辑
+};
+```
+
+同时，框架引入了读写锁机制 (`rw_lock`)。在底层驱动解包 (`unpack`) 数据时，会获取写锁；而在应用层读取连续量数据时，需要配合 `pyro::read_scope_lock` 获取读锁，以保证多线程环境下的数据一致性。
+
+```C++
+// 底层写入时加写锁 (pyro_dr16_rc_drv.cpp)
+void dr16_drv_t::unpack(const uint8_t *buf) {
+    // ...
+    write_scope_lock rc_write_lock(get_lock());
+    shared_v_rc.axes.rx = ...
 }
 ```
 
-- **机制**：任务默认挂起。一旦收到首帧数据，立即唤醒并将 `sequence` 对应位置 1，宣告设备上线。
-    
-#### 4.2 阶段二：在线保活 (Active Loop)
+### 4. 按键状态管理与“延迟”机制
+
+离散控制元件的状态由 `tiny_switch_t` 和 `tiny_button_t` 类进行管理。`tiny_button_t` 内置了 1 帧的物理消抖处理。
+
+**核心差异：`PRESS_DOWN` (按下) 与 `SINGLE_CLICK` (单击)**
+* **`PRESS_DOWN` (零延迟)**：当按键电平发生变化并经过 1 帧消抖后，状态机会立刻派发 `PRESS_DOWN` 事件。因此，订阅 `PRESS_DOWN` 能够获得极致的响应速度。
+* **`SINGLE_CLICK` (带有判定延迟)**：如果按键开启了多击判定，系统在按键松开后会进入等待确认态，等待最多 18 帧的时间来观察是否有后续的连击操作。只有超时确认没有连击，才会派发 `SINGLE_CLICK` 事件。
 
 ```C++
-while (sequence >> _priority & 0x01) {
-    // 超时接收：120ms (约允许丢包 8 帧: 14ms * 8 = 112ms)
-    xReceivedBytes = xMessageBufferReceive(..., 120);
-    
-    if (xReceivedBytes == 0) {
-        // 超时 -> 判定断连 -> 清除在线位 -> 回到阶段一
-        sequence &= ~(1 << _priority);
+// pyro_rc_core.h (tiny_button_t::update 状态机)
+switch (state) {
+    case 0: // 【空闲态】
+        if (current_level == active_level) {
+            dispatch(btn_event_t::PRESS_DOWN); // 按下瞬间，立即派发零延迟事件
+            // ...
+            state = 1;
+        }
+        break;
+    case 1: // 【按下态】
+        if (current_level != active_level) {
+            // ...
+            if (cfg_multi_clk) state = 2; // 若开启多击判定，进入状态2等待
+            else { dispatch(btn_event_t::SINGLE_CLICK); state = 0; }
+        }
+        break;
+    case 2: // 【等待确认连击态】
+        // ...
+        else if (++ticks >= 18) { // 18帧 = 252ms，超时确认
+            if (repeat_cnt == 1) dispatch(btn_event_t::SINGLE_CLICK); // 延迟派发
+            // ...
+            state = 0;
+        }
+        break;
+}
+```
+
+### 5. 事件发布与订阅机制 (Broker)
+
+应用层通过泛型代理类 `rc_broker_t` 订阅按键和拨杆事件。当硬件控件判定操作发生时触发 `publish`。Broker 会通过 FreeRTOS 的 `xTaskNotify` 向绑定的应用层任务发送指定的位掩码 (Event Bits)。
+
+```C++
+// pyro_rc_core.h
+static void publish(TargetType *target, EventType ev) {
+    for (auto &_sub : _subs) {
+        if (_sub.target_ptr == target && _sub.target_ev == ev) {
+            // 直接触发对应任务的通知位掩码
+            xTaskNotify(_sub.task, _sub.bit, eSetBits);
+        }
     }
 }
 ```
 
-- **机制**：若 120ms 内无新数据，驱动认定物理连接断开，自动清除在线状态，释放控制权。
-
-### 5. 事件管理：时间戳机制 (`change_time`)
-
-为解决“按键一次触发多次”的问题，驱动将“状态”与“事件”解耦。在使用代表事件的量（如拨杆切换操作，按键按下操作等）时应用时间戳去判断是否是新包。
-
-```C++
-/* pyro_vt03_rc_drv.cpp :: check_ctrl */
-// 当检测到状态变化（如 按下、松开、长按触发）时
-key.change_time = now; // 记录事件发生的时间戳
-```
-
-- **应用**：业务层只需判断 `key.change_time > last_processed_time` 即可识别这是否是一个新的操作指令。
+---
 
 ## Part 2: 快速上手 (Quick Start)
 
-### 1. 启动驱动
+### 1. 订阅事件 (App 级初始化)
 
-无需手动 `init`，直接获取实例并使能。
+在应用层的初始化函数中，定义任务通知位掩码，将所需的硬件动作绑定到当前任务句柄。如果对延迟敏感（如武器开火），应优先订阅 `PRESS_DOWN`。
 
 ```C++
-#include "pyro_rc_hub.h"
+// 1. 定义任务通知的位掩码
+constexpr uint32_t EVENT_BIT_FRIC_TOGGLE   = (1 << 0);
+constexpr uint32_t EVENT_BIT_FIRE          = (1 << 1);
 
-void robot_init() {
-    // 获取实例并建立物理连接
-    pyro::rc_hub_t::get_instance(pyro::rc_hub_t::VT03)->enable();
+void hero_booster_init(void *argument) {
+    // 获取全局虚拟控制器引用 (确保已调用初始化)
+    auto &vrc = pyro::rc_drv_t::read();
+    
+    // 2. 通过 Broker 登记事件
+    // 订阅按键 Q "按下" (PRESS_DOWN)，享受零延迟响应
+    pyro::btn_broker::subscribe(&vrc.keys.q, pyro::btn_event_t::PRESS_DOWN, 
+                                booster_task_handle, EVENT_BIT_FRIC_TOGGLE);
+    
+    // 订阅左拨杆向下切到中档事件
+    pyro::sw_broker::subscribe(&vrc.switches.left, pyro::sw_event_t::DOWN_TO_MID, 
+                               booster_task_handle, EVENT_BIT_FIRE);
 }
 ```
 
-### 2. 读取数据与事件处理 (最佳实践)
+### 2. 检查在线状态与读取数据 (App 级循环)
 
-下面的代码展示了如何利用 `change_time` 处理按键逻辑，确保**按一次只触发一次**。
+在应用层的线程循环中，**必须**使用 `check_online()` 接口来判断当前是哪一款遥控器在线，以此来决定读取哪些硬件专有字段（如 VT03 的 gear，或 DR16 的 switch）。
 
 ```C++
-#include "pyro_vt03_rc_drv.h"
-#include "pyro_dwt_drv.h" // 用于获取当前时间或其他时间相关操作
+void hero_booster_thread(void *argument) {
+    while (true) {
+        uint32_t notify_val = 0;
+        
+        // 1. 提取任务通知（非阻塞等待，超时为0）
+        xTaskNotifyWait(0x00, 0xFFFFFFFF, &notify_val, 0);
 
-void control_task() {
-    auto *rc_drv = pyro::rc_hub_t::get_instance(pyro::rc_hub_t::VT03);
-    
-    // 【关键】本地变量，记录上一次处理按键的时间戳
-    static float last_process_time = 0.0f;
-
-    while (1) {
-        if (rc_drv->check_online()) {
-            pyro::read_scope_lock lock(rc_drv->get_lock());
-            const auto *data = 
-	            static_cast<const pyro::vt03_drv_t::vt03_ctrl_t *>(rc_drv->read());
-
-            // --- 1. 处理连续量 (摇杆) ---
-            // 直接使用，无需时间戳判断
-            float speed = data->rc.ch_ly; 
-
-            // --- 2. 处理离散事件 (按键/拨杆) ---
-            // 检查左功能键是否有“新”的动作发生
-            if (data->rc.fn_l.change_time > last_process_time)
-            {
-                // 这是一个新事件！判断具体类型：
-                if (data->rc.fn_l.ctrl == pyro::vt03_drv_t::key_ctrl_t::KEY_PRESSED) {
-                    // 处理单击：切换模式
-                    toggle_mode();
-                }
-                else if (data->rc.fn_l.ctrl == pyro::vt03_drv_t::key_ctrl_t::KEY_HOLD) {
-                    // 处理长按：强制复位
-                    system_reset();
-                }
-                
-                // 【重要】更新本地时间戳，确保同一个事件不会被处理第二次
-                last_process_time = data->rc.fn_l.change_time;
+        // 默认重置所有脉冲触发变量，形成严格的 1 帧电平脉冲
+        quad_booster_cmd_ptr->fire_enable = false;
+        
+        // 2. 检查具体遥控器是否在线并分支处理
+        if (vt03_drv_t::instance().check_online()) {
+            // 获取读锁以保证数据一致性
+            pyro::read_scope_lock lock(pyro::vt03_drv_t::instance().get_lock());
+            auto &vrc = pyro::rc_drv_t::read();
+            
+            // VT03 专有逻辑：使用 gear 挡位
+            if (pyro::sw_pos_t::DOWN == vrc.switches.gear.current_pos) {
+                // ... Auto-aim 开火等业务逻辑 ...
+            }
+            
+            // 处理事件通知
+            if (notify_val & EVENT_BIT_FIRE) {
+                quad_booster_cmd_ptr->fire_enable = true;
+            }
+            
+        } else if (dr16_drv_t::instance().check_online()) {
+            // 获取读锁以保证数据一致性
+            pyro::read_scope_lock lock(pyro::dr16_drv_t::instance().get_lock());
+            auto &vrc = pyro::rc_drv_t::read();
+            
+            // DR16 专有逻辑：使用 right switch
+            if (pyro::sw_pos_t::DOWN == vrc.switches.right.current_pos) {
+                quad_booster_cmd_ptr->mode = pyro::cmd_base_t::mode_t::PASSIVE;
             }
         }
-        else {
-            robot_stop();
-        }
-        vTaskDelay(2);
+        
+        vTaskDelay(1);
     }
 }
-```
-
-> tip：对于按键，多次连击的最后一下长按被认为是**带有连击属性**的长按操作
-
-### 3. 停止连接
-
-当需要停止连接时，调用 `disable` 会立即切断信号流。
-
-```C++
-// 1. 物理层断开 UART 回调
-// 2. 逻辑层立即清除 Online 标志
-// 3. 此时若有低优先级遥控器在线，它将立即接管控制权
-pyro::rc_hub_t::get_instance(pyro::rc_hub_t::VT03)->disable();
 ```
