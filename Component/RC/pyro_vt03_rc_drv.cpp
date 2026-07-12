@@ -18,6 +18,8 @@ vt03_drv_t &vt03_drv_t::instance()
 vt03_drv_t::vt03_drv_t(uart_drv_t &vt03_uart)
     : rc_drv_t(vt03_uart, "vt03_task", 0, sizeof(vt03_buf_t))
 {
+
+
 }
 
 bool vt03_drv_t::check_packet(const uint8_t *buf)
