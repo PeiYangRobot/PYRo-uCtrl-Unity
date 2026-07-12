@@ -3,9 +3,6 @@
 #include "task.h"
 #include "cstring"
 #include "pyro_bsp_uart.h"
-#include "../../../Robot/Hero/Chassis/pyro_hybrid_chassis.h"
-
-extern pyro::hybrid_chassis_t *hybrid_chassis_ptr;
 
 namespace pyro
 {
@@ -97,8 +94,6 @@ void jcom_drv_t::send()
 
 void jcom_drv_t::thread()
 {
-    add_data(&hybrid_chassis_ptr->_ctx.data.total_predicted_power);
-    add_data(&hybrid_chassis_ptr->_ctx.data.buf_energy);
 
     while (true)
     {
