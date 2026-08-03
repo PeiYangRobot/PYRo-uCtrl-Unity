@@ -39,8 +39,12 @@ private:
     float _gyro_n[3];
     float _acc_b[3];
     float _acc_n[3];
+    float _acc_without_g_b[3];
+    float _acc_without_g_n[3];
     float _angle_b[3];
     float _angle_n[3];
+    float _gravity_b[3];
+    float _gravity_n[3];
 
     float _dt;
     float _t;
@@ -57,8 +61,10 @@ private:
     ins_config_t _config;
 
     static TaskHandle_t _ins_task_handle;
-    void __ins_task();
-    static void __static_ins_task(void *argument);
+    void _ins_task();
+    static void _static_ins_task(void *argument);
+    status_t _transform_b2n(float *v_b, float *v_n, float *b2n_q);
+    status_t _transform_n2b(float *v_n, float *v_b, float *b2n_q);
     
 public:
     static ins_drv_t* get_instance(void);
@@ -71,6 +77,8 @@ public:
     status_t get_gyro_n(float* g_yaw, float* g_pitch, float* g_roll);
     status_t get_accel_b(float* accel_x, float* accel_y, float* accel_z);
     status_t get_accel_n(float* accel_x, float* accel_y, float* accel_z);
+    status_t get_accel_without_g_b(float* a_x, float* a_y, float* a_z);
+    status_t get_accel_without_g_n(float* a_x, float* a_y, float* a_z);
     status_t get_quaternion(float* q0, float* q1, float* q2, float* q3);
 };
 }

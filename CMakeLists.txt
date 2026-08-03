@@ -43,6 +43,7 @@ target_sources(PYRo PRIVATE
         Algorithm/Kinematics/pyro_kin_wl.cpp
         Algorithm/OLS/pyro_algo_ols.cpp
         Algorithm/PID/pyro_algo_pid.cpp
+        Algorithm/PD/pyro_algo_pd.cpp
         Algorithm/EKF/QuaternionEKF.cpp
         Algorithm/KF/kalman_filter.cpp
         Algorithm/Common/pyro_algo_common.cpp
@@ -108,6 +109,7 @@ target_include_directories(PYRo PUBLIC
         Algorithm/Kinematics
         Algorithm/OLS
         Algorithm/PID
+        Algorithm/PD
         Algorithm/EKF
         Algorithm/KF
         Algorithm/LESO

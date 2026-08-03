@@ -11,6 +11,34 @@ float wrap2pi_f32(const float input)
     return std::fmod(input, 2.0f * PI);
 }
 
+// Legacy-compatible angle normalization used by the wheel-legged control path.
+// Keep wrap2pi_f32() unchanged for existing users of the migrated common layer.
+float wrap2pi_f32_normalized(const float input)
+{
+    float ret = std::fmod(input, 2.0f * PI);
+    if (ret >= PI)
+    {
+        ret -= 2.0f * PI;
+    }
+    else if (ret < -PI)
+    {
+        ret += 2.0f * PI;
+    }
+    return ret;
+}
+
+float evaluate_polynomial_ascending(const float x, const float *coeffs,
+                                    const uint32_t degree)
+{
+    // Coefficients are ordered as c0 + c1*x + ... + cn*x^n.
+    float result = coeffs[degree];
+    for (uint32_t i = degree; i > 0; --i)
+    {
+        result = result * x + coeffs[i - 1];
+    }
+    return result;
+}
+
 float radps_to_rpm(const float radps)
 {
     return radps * 9.5492966f;
@@ -63,6 +91,16 @@ float loop_fp32_constrain(float val, const float min_val, const float max_val)
         val += len;
     }
     return val;
+}
+
+float fp32_constrain(float val, const float min_val, const float max_val)
+{
+    if (val > max_val)
+        return max_val;
+    if (val < min_val)
+        return min_val;
+    return val;
+
 }
 
 } // namespace pyro

@@ -2,7 +2,7 @@
  * @Author: Vod vod0575@outlook
  * @Date: 2026-02-06 19:32:10
  * @LastEditors: vod vod_x@outlook.com
- * @LastEditTime: 2026-02-26 14:43:33
+ * @LastEditTime: 2026-03-01 17:55:16
  * @Description: 
  * The kinematic solve algorithm for wheel legged robot. If you want to use,
  * define a variable which type is wheel_legged_kin_t, than call its init 
@@ -103,6 +103,10 @@ public:
      * @param {float} theta2 
        Angle between j1-j5 and direction of movement, counter clockwise if 
        positive(rad).
+     * @param {float} d_theta1
+       Differential of theta1(rad/s).
+     * @param {float} d_theta2
+       Differential of theta2(rad/s).
      * @param {float} *phi1  
        Return solved angle between j3-j4 and direction of movment, counter 
        clockwise is positive(rad).
@@ -113,14 +117,23 @@ public:
        Return solved polar radius of j9(m).
      * @param {float} *alpha
        Return solved polar angle of j9, counter clockwise is positive(rad).
+     * @param {float} *d_length
+       Return solved differential of polar radius of j9(m/s).
+     * @param {float} *d_alpha
+       Return solved differential of polar angle of j9(rad/s).
      * @return {*}
        PYRO_OK: OK.
        PYRO_NOT_FOUND: Call this function before init.
        PYRO_PARAM_ERROR: The point of parameter is null.
      */
     status_t solve(float theta1, float theta2, 
+                   float d_theta1, float d_theta2,
                    float *phi1,  float *phi2, 
-                   float *length, float *alpha);
+                   float *length, float *alpha,
+                   float *d_length, float *d_alpha,
+                    float *d_x, float *d_y,
+                    float *x, float *y);
+
 
     
     /**
@@ -158,6 +171,9 @@ private:
     /* Flag to check whether the solver is initialized, 0 for not initialized,
         1 for initialized.*/
     uint8_t _is_inited{0};
+  /* The solver is called once per leg in sequence, so keep two LPF states
+     and rotate through them on each solve call. */
+  uint8_t _solve_filter_idx{0};
    
     /* The cofficients for phi solve */
     phi_k_t _phi_k;
@@ -165,6 +181,8 @@ private:
     polar_k_t _polar_k;
     /* The cofficients for VMC transform matrix */
     vmc_k_t _vmc_k;
+  float _d_length_lpf[2] = {0.0f, 0.0f};
+  float _d_alpha_lpf[2] = {0.0f, 0.0f};
 
 
 };

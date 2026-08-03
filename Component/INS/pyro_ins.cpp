@@ -84,7 +84,7 @@ status_t ins_drv_t::init(const ins_config_t &config)
 
     if (_ins_task_handle == nullptr)
     {
-        xTaskCreate(__static_ins_task, "ins_task", 512, this, 2,
+        xTaskCreate(_static_ins_task, "ins_task", 512, this, 2,
                     &_ins_task_handle);
     }
     else
@@ -98,15 +98,19 @@ status_t ins_drv_t::init(const ins_config_t &config)
     return PYRO_OK;
 }
 
-void ins_drv_t::__static_ins_task(void *argument)
+void ins_drv_t::_static_ins_task(void *argument)
 {
-    ((ins_drv_t *)argument)->__ins_task();
+    ((ins_drv_t *)argument)->_ins_task();
 }
 
-void ins_drv_t::__ins_task()
+
+void ins_drv_t::_ins_task()
 {
     _dwt_cnt = 0;
-    IMU_QuaternionEKF_Init(10, 0.001, 10000000, 0.9996, 0.004f);
+    IMU_QuaternionEKF_Init(10, 0.001, 10000000, 0.9996, 0.01f);
+    _gravity_n[X] = 0.0f;
+    _gravity_n[Y] = 0.0f;
+    _gravity_n[Z] = imu_data.gNorm;
 
     while (1)
     {
@@ -155,9 +159,74 @@ void ins_drv_t::__ins_task()
         _angle_n[Y] = QEKF_INS.Pitch;
         _angle_n[Z] = QEKF_INS.Yaw;
 
+        // Restore the original gravity compensation and frame transforms.
+        _transform_n2b(_gravity_n, _gravity_b, _q);
+        _acc_without_g_b[X] = _acc_b[X] - _gravity_b[X];
+        _acc_without_g_b[Y] = _acc_b[Y] - _gravity_b[Y];
+        _acc_without_g_b[Z] = _acc_b[Z] - _gravity_b[Z];
+
+        _transform_b2n(_acc_b, _acc_n, _q);
+        _transform_b2n(_acc_without_g_b, _acc_without_g_n, _q);
+
         vTaskDelay(1);
     }
 }
+
+status_t ins_drv_t::_transform_b2n(float *v_b, float *v_n, float *b2n_q)
+{
+    if (v_b == nullptr || v_n == nullptr || b2n_q == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+
+    // QEKF_INS.q is the body-to-navigation quaternion.
+    const float *q = b2n_q;
+    v_n[0] = (1.0f - 2.0f * (q[2] * q[2] + q[3] * q[3])) * v_b[0]
+           + (2.0f * (q[1] * q[2] - q[0] * q[3])) * v_b[1]
+           + (2.0f * (q[1] * q[3] + q[0] * q[2])) * v_b[2];
+
+    v_n[1] = (2.0f * (q[1] * q[2] + q[0] * q[3])) * v_b[0]
+           + (1.0f - 2.0f * (q[1] * q[1] + q[3] * q[3])) * v_b[1]
+           + (2.0f * (q[2] * q[3] - q[0] * q[1])) * v_b[2];
+
+    v_n[2] = (2.0f * (q[1] * q[3] - q[0] * q[2])) * v_b[0]
+           + (2.0f * (q[2] * q[3] + q[0] * q[1])) * v_b[1]
+           + (1.0f - 2.0f * (q[1] * q[1] + q[2] * q[2])) * v_b[2];
+
+    return PYRO_OK;
+}
+
+status_t ins_drv_t::_transform_n2b(float *v_n, float *v_b, float *b2n_q)
+{
+    if (v_n == nullptr || v_b == nullptr || b2n_q == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+
+    // R(q)^T = R(q*) for the navigation-to-body transform.
+    float q[4] = {
+        b2n_q[0],
+        -b2n_q[1],
+        -b2n_q[2],
+        -b2n_q[3],
+    };
+
+    v_b[0] = (1.0f - 2.0f * (q[2] * q[2] + q[3] * q[3])) * v_n[0]
+           + (2.0f * (q[1] * q[2] - q[0] * q[3])) * v_n[1]
+           + (2.0f * (q[1] * q[3] + q[0] * q[2])) * v_n[2];
+
+    v_b[1] = (2.0f * (q[1] * q[2] + q[0] * q[3])) * v_n[0]
+           + (1.0f - 2.0f * (q[1] * q[1] + q[3] * q[3])) * v_n[1]
+           + (2.0f * (q[2] * q[3] - q[0] * q[1])) * v_n[2];
+
+    v_b[2] = (2.0f * (q[1] * q[3] - q[0] * q[2])) * v_n[0]
+           + (2.0f * (q[2] * q[3] + q[0] * q[1])) * v_n[1]
+           + (1.0f - 2.0f * (q[1] * q[1] + q[2] * q[2])) * v_n[2];
+
+    return PYRO_OK;
+}
+
+
 
 status_t ins_drv_t::get_angles_b(float *yaw, float *pitch, float *roll)
 {
@@ -254,6 +323,30 @@ status_t ins_drv_t::get_accel_n(float *accel_x, float *accel_y, float *accel_z)
     *accel_x = _acc_n[X];
     *accel_y = _acc_n[Y];
     *accel_z = _acc_n[Z];
+    return PYRO_OK;
+}
+
+status_t ins_drv_t::get_accel_without_g_b(float *a_x, float *a_y, float *a_z)
+{
+    if (a_x == nullptr || a_y == nullptr || a_z == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+    *a_x = _acc_without_g_b[X];
+    *a_y = _acc_without_g_b[Y];
+    *a_z = _acc_without_g_b[Z];
+    return PYRO_OK;
+}
+
+status_t ins_drv_t::get_accel_without_g_n(float *a_x, float *a_y, float *a_z)
+{
+    if (a_x == nullptr || a_y == nullptr || a_z == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+    *a_x = _acc_without_g_n[X];
+    *a_y = _acc_without_g_n[Y];
+    *a_z = _acc_without_g_n[Z];
     return PYRO_OK;
 }
 
