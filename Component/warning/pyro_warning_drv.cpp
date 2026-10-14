@@ -319,7 +319,6 @@ void warning_drv_t::set_buzzer_warning_level(buzzer_warning_level_t level)
             _current_buzzer_warning_level = level;
         }
         _current_buzzer_warning_level = (int)level > (int)_current_buzzer_warning_level ? level : _current_buzzer_warning_level;
-        melody_loaded = false;
         taskEXIT_CRITICAL();
     }
     void warning_drv_t::add_rgb_warning_type(RGB_waring_type_t type)
