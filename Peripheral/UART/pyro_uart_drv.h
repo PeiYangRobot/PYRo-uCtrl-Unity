@@ -21,7 +21,6 @@
 #include "stm32h7xx_hal_uart.h"
 
 #include "pyro_core_def.h"
-#include "pyro_serial_itf.h"
 
 #include "FreeRTOS.h"
 
@@ -41,15 +40,28 @@ class bsp_uart;
  * @brief UART driver class.
  * 串口驱动类。
  */
-class uart_drv_t : public serial_itf_t
+class uart_drv_t
 {
     // Declare bsp_uart as a friend to allow calling the private constructor.
     // 声明 bsp_uart 为友元，允许其调用私有构造函数。
     friend class bsp_uart;
 
     /* Private Types ---------------------------------------------------------*/
-    // 注：rx_event_func 继承自 serial_itf_t（UART 与 USB-CDC 共用同一回调签名），
-    //     此处不再重复定义。
+    /**
+     * @brief RX event callback signature.
+     * 接收事件回调函数签名。
+     *
+     * @param p Pointer to the received data buffer.
+     * 接收数据缓冲区的指针。
+     * @param size Size of the received data.
+     * 接收数据的大小。
+     * @param xHigherPriorityTaskWoken Flag to request a context switch.
+     * 请求上下文切换的标志。
+     * @return true if the data is consumed and buffer should switch.
+     * 如果数据已被处理且需要切换缓冲区，则返回 true。
+     */
+    using rx_event_func = std::function<bool(
+        uint8_t *p, uint16_t size, BaseType_t& xHigherPriorityTaskWoken)>;
 
     // 【新增】定义 TX 发送完成的事件回调函数类型
     using tx_cplt_func = std::function<void(BaseType_t& xHigherPriorityTaskWoken)>;
@@ -87,7 +99,7 @@ public:
      * @brief Destructor.
      * 析构函数。
      */
-    ~uart_drv_t() override;
+    ~uart_drv_t();
 
     /* Public Methods - Peripheral Management --------------------------------*/
     /**
@@ -117,13 +129,13 @@ public:
      * @brief Blocking write using HAL polling.
      * 使用 HAL 轮询方式的阻塞写操作。
      */
-    status_t write(const uint8_t *p, uint16_t size, uint32_t waittime) override;
+    status_t write(const uint8_t *p, uint16_t size, uint32_t waittime);
 
     /**
      * @brief Non-blocking write using HAL DMA.
      * 使用 HAL DMA 方式的非阻塞写操作。
      */
-    status_t write(const uint8_t *p, uint16_t size) override;
+    status_t write(const uint8_t *p, uint16_t size);
 
     /* Public Methods - Reception Control ------------------------------------*/
     /**
@@ -143,24 +155,13 @@ public:
      * @brief Adds a custom C++ RX event callback.
      * 添加自定义的 C++ 接收事件回调。
      */
-    void add_rx_event_callback(const rx_event_func &func, uint32_t owner) override;
+    void add_rx_event_callback(const rx_event_func &func, uint32_t owner);
 
     /**
      * @brief Removes a custom C++ RX event callback by its owner ID.
      * 根据所有者 ID 移除自定义的 C++ 接收事件回调。
      */
-    status_t remove_rx_event_callback(uint32_t owner) override;
-
-    /**
-     * @brief 驱动层组帧配置（serial_itf_t 契约）。
-     * @note UART 侧保持现有 IDLE 语义：DMA ReceiveToIdle 已按"一段数据"回调，
-     *       故此处为 no-op；接口存在是为了让调用层对 UART/USB 无差别调用。
-     */
-    void set_frame_config(uint8_t sof, uint16_t frame_len) override
-    {
-        (void) sof;
-        (void) frame_len;
-    }
+    status_t remove_rx_event_callback(uint32_t owner);
 
     // 【新增】注册 TX 发送完成回调
     void set_tx_cplt_callback(const tx_cplt_func &func) {

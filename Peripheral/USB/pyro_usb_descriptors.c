@@ -91,6 +91,7 @@ void pyro_usb_desc_set_serial(const char *s) {
     }
 }
 
+// 设备描述符字符串
 static uint16_t _desc_str[32 + 1];
 
 // Invoked when received GET STRING DESCRIPTOR
