@@ -237,7 +237,7 @@ void usb_cdc_drv_t::process_rx() {
 void usb_cdc_drv_t::dispatch(uint8_t frame_id, const uint8_t *data, uint16_t len) {
     for (auto it = _rx_handlers.begin(); it != _rx_handlers.end(); ++it)
         if (it->first == frame_id) {
-            it->second(data, len);
+            it->second(frame_id, data, len);
             break;
         }
 }

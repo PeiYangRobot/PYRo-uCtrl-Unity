@@ -23,7 +23,7 @@ class usb_cdc_drv_t {
      * @return true if the data is consumed and buffer should switch.
      * 如果数据已被处理，则返回 true。
      */
-    using rx_event_handler = std::function<bool(const uint8_t *p, uint16_t size)>;
+    using rx_event_handler = std::function<bool(uint8_t frame_id, const uint8_t *p, uint16_t size)>;
 
   public:
     static usb_cdc_drv_t& instance();
@@ -35,7 +35,15 @@ class usb_cdc_drv_t {
 
     status_t enable_rx();
     status_t disable_rx();
-    status_t register_rx(uint8_t frame_id, const rx_event_handler &handler);
+
+    /**
+     * @brief 注册接收命令回调
+     *
+     * @param frame_id 接收指定id的帧
+     * @param handler 回调函数
+     * @return
+     */
+status_t register_rx(uint8_t frame_id, const rx_event_handler &handler);
     status_t remove_rx(uint8_t frame_id);
 
     /**
