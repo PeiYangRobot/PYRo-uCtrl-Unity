@@ -1,3 +1,7 @@
+/**
+ * @version 1.1.0
+ */
+
 #ifndef DM_MOTOR_DRV_H
 #define DM_MOTOR_DRV_H
 
@@ -29,9 +33,9 @@ class dm_motor_drv_t : public motor_base_t // MIT only
     status_t update_feedback() override;
     status_t send_torque(float torque) override;
 
-    void set_position_range(float min, float max);
-    void set_rotate_range(float min, float max);
-    void set_torque_range(float min, float max);
+    void set_position_range(float min, float max) override;
+    void set_rotate_range(float min, float max) override;
+    void set_torque_range(float min, float max) override;
 
     void set_runtime_kp(float kp);
     void set_runtime_kd(float kd);

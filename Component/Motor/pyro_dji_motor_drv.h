@@ -1,3 +1,7 @@
+/**
+ * @version 1.1.0
+ */
+
 #ifndef DJI_M_MOTOR_DRV_H
 #define DJI_M_MOTOR_DRV_H
 
@@ -104,11 +108,21 @@ class dji_m2006_motor_drv_t : public dji_motor_drv_t
 class dji_gm_6020_motor_drv_t : public dji_motor_drv_t
 {
   public:
+    enum control_mode_t
+    {
+        CURRENT_MODE = 0,  // 电流模式，tx_id 使用 0x1fe/0x2fe
+        VOLTAGE_MODE = 1   // 电压模式，tx_id 使用 0x1ff/0x2ff
+    };
+
     dji_gm_6020_motor_drv_t(pyro::dji_motor_tx_frame_t::register_id_t id,
-                            bsp_can::which_can which);
+                            bsp_can::which_can which,
+                            control_mode_t mode);
     ~dji_gm_6020_motor_drv_t()
     {
     }
+
+  private:
+    control_mode_t _control_mode;
 };
 }; // namespace pyro
 

@@ -1,3 +1,7 @@
+/**
+ * @version 1.1.0
+ */
+
 #ifndef MOTOR_BASE_H
 #define MOTOR_BASE_H
 
@@ -33,6 +37,12 @@ class motor_base_t
 
     bool is_enable(void);
     bool is_online(void);
+
+    // 设置反馈数据范围（用于解析）
+    // 提供默认实现，派生类可选择性覆盖
+    virtual void set_position_range(float min, float max);
+    virtual void set_rotate_range(float min, float max);
+    virtual void set_torque_range(float min, float max);
 
   protected:
     bsp_can::which_can _which_can;

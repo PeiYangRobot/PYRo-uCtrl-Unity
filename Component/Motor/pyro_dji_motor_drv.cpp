@@ -1,7 +1,9 @@
+/**
+ * @version 1.1.0
+ */
+
 #include "pyro_dji_motor_drv.h"
-
 #include "pyro_dwt_drv.h"
-
 #include <cmath>
 #include <cstring>
 
@@ -254,8 +256,9 @@ dji_m2006_motor_drv_t::dji_m2006_motor_drv_t(
 }
 
 dji_gm_6020_motor_drv_t::dji_gm_6020_motor_drv_t(
-    dji_motor_tx_frame_t::register_id_t id, bsp_can::which_can which)
-    : dji_motor_drv_t(id, which)
+    dji_motor_tx_frame_t::register_id_t id, bsp_can::which_can which,
+    control_mode_t mode)
+    : dji_motor_drv_t(id, which), _control_mode(mode)
 {
     switch (id)
     {
@@ -263,14 +266,14 @@ dji_gm_6020_motor_drv_t::dji_gm_6020_motor_drv_t(
         case dji_motor_tx_frame_t::id_2:
         case dji_motor_tx_frame_t::id_3:
         case dji_motor_tx_frame_t::id_4:
-            _tx_id = 0x1fe;
+            _tx_id = (_control_mode == CURRENT_MODE) ? 0x1fe : 0x1ff;
             _rx_id = 0x204 + id + 1;
             break;
         case dji_motor_tx_frame_t::id_5:
         case dji_motor_tx_frame_t::id_6:
         case dji_motor_tx_frame_t::id_7:
             // case dji_motor_tx_frame_t::id_8: for gm6020 id8 is unavailable
-            _tx_id = 0x2fe;
+            _tx_id = (_control_mode == CURRENT_MODE) ? 0x2fe : 0x2ff;
             _rx_id = 0x204 + id + 1;
             break;
         default:
@@ -287,8 +290,19 @@ dji_gm_6020_motor_drv_t::dji_gm_6020_motor_drv_t(
     _tx_frame =
         dji_motor_tx_frame_pool_t::get_instance()->get_frame(which, _tx_id);
     _tx_frame->register_id(_register_id);
-    _max_torque_f = 3.0f;
-    _max_torque_i = 16384;
+    
+    // 根据控制模式设置不同的映射范围
+    _max_torque_f = 3.0f;  // 最大力矩 3.0 N·m
+    if (_control_mode == CURRENT_MODE)
+    {
+        // 电流模式：给定值范围 -16384~0~16384，对应 -3A~0~3A
+        _max_torque_i = 16384;
+    }
+    else  // VOLTAGE_MODE
+    {
+        // 电压模式：给定值范围 -25000~0~25000
+        _max_torque_i = 25000;
+    }
 }
 
 }

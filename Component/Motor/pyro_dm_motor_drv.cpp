@@ -1,3 +1,7 @@
+/**
+ * @version 1.1.0
+ */
+
 #include "pyro_dm_motor_drv.h"
 
 namespace pyro
