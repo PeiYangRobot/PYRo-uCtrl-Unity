@@ -6,7 +6,7 @@ namespace usb_cdc {
     constexpr uint8_t SOF = 0xA5;
     constexpr uint8_t HEADER_SIZE = 5;
 
-    constexpr uint16_t RX_BUF_CAPACITY = 640, TX_BUF_CAPACITY = 1024;
+    constexpr uint16_t RX_BUF_CAPACITY = 512, TX_BUF_CAPACITY = 512;
 }
 
 #endif // __USB_CDC_CONFIG_H__

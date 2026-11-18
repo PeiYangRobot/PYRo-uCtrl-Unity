@@ -30,33 +30,35 @@ class usb_cdc_drv_t {
     usb_cdc_drv_t(const usb_cdc_drv_t&) = delete;
     usb_cdc_drv_t& operator=(const usb_cdc_drv_t&) = delete;
 
-    status_t init(const char *serial);
-    status_t reset();
+    status_t init(const char *serial_str);
+    status_t reset(uint8_t serial_id);
 
-    status_t enable_rx();
-    status_t disable_rx();
+    status_t enable_rx(uint8_t serial_id);
+    status_t disable_rx(uint8_t serial_id);
 
     /**
      * @brief 注册接收命令回调
      *
+     * @param serial_id 指定串口
      * @param frame_id 接收指定id的帧
      * @param handler 回调函数
      * @return
      */
-status_t register_rx(uint8_t frame_id, const rx_event_handler &handler);
-    status_t remove_rx(uint8_t frame_id);
+    status_t register_rx(uint8_t serial_id, uint8_t frame_id, const rx_event_handler &handler);
+    status_t remove_rx(uint8_t serial_id, uint8_t frame_id);
 
     /**
      * @brief 无发送完成回调的发送函数
+     * @param serial_id 指定串口
      * @param frame_id 发送帧ID
      * @param data 指向发送数据的指针
      * @param len 发送数据的长度
      */
-    status_t send(uint8_t frame_id, const uint8_t *data, uint16_t len);
+    status_t send(uint8_t serial_id, uint8_t frame_id, const uint8_t *data, uint16_t len);
 
-    [[nodiscard]] bool is_connected();
+    [[nodiscard]] bool is_ready();
 
-    void on_cdc_rx();
+    void on_cdc_rx(uint8_t itf);
     void on_mount();
     void on_umount();
 
@@ -74,11 +76,7 @@ status_t register_rx(uint8_t frame_id, const rx_event_handler &handler);
      *
      * @par 端序约定（重要）
      * `data_len` 是 `uint16_t`，它在**线上**的字节序等于 MCU 在内存里的字节序，
-     * 因为结构体是 `packed`，`memcpy` 到缓冲区就是原样拷贝内存。
-     *
-     * 本项目 MCU 为 STM32H723（ARM Cortex-M7）：
-     *  - Cortex-M 系列**只支持小端**（`SCB->AIRCR.ENDIANNESS` 恒为 0）；
-     *  - GCC 在 ARM 上遵循 AAPCS，`packed` 结构体无填充、字段按声明顺序紧密排列；
+     *  Cortex-M 系列**只支持小端**（`SCB->AIRCR.ENDIANNESS` 恒为 0）；
      */
     struct frame_header_t {
         uint8_t  sof;
@@ -100,24 +98,33 @@ status_t register_rx(uint8_t frame_id, const rx_event_handler &handler);
         usb_cdc_drv_t *_owner;
     };
 
+    class serial_t {
+        friend class usb_cdc_drv_t;
+
+        void on_cdc_rx();
+        void drain_tx();
+        void process_rx();
+        void dispatch(uint8_t frame_id, const uint8_t *data, uint16_t len);
+
+        uint8_t _id{0};
+
+        std::vector<std::pair<uint8_t, rx_event_handler>> _rx_handlers; // <frame_id, rx_event_function>
+        uint8_t _rx_buf[usb_cdc::RX_BUF_CAPACITY];
+        uint16_t _rx_tail{0};
+        uint8_t _tx_buf[usb_cdc::TX_BUF_CAPACITY];
+        uint16_t _tx_tail{0};
+        mutex_t  _tx_mutex;
+
+        bool _rx_enable{false};
+    };
+
     usb_cdc_drv_t() = default;
     ~usb_cdc_drv_t();
 
-    void drain_tx();
-    void process_rx();
-    void dispatch(uint8_t frame_id, const uint8_t *data, uint16_t len);
-
-    uint8_t _itf{0};
     usb_task_t *_task;
-    std::vector<std::pair<uint8_t, rx_event_handler>> _rx_handlers;
-    uint8_t _rx_buf[usb_cdc::RX_BUF_CAPACITY];
-    uint16_t _rx_tail{0};
-    uint8_t _tx_buf[usb_cdc::TX_BUF_CAPACITY];
-    uint16_t _tx_tail{0};
-    mutex_t  _tx_mutex;
+    serial_t _serial[2];
 
     bool _init{false};
-    bool _rx_enable{false};
 };
 
 }
