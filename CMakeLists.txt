@@ -37,6 +37,7 @@ target_sources(PYRo PRIVATE
         Peripheral/UART/pyro_bsp_uart.cpp
         Peripheral/USB/pyro_usb_cdc_drv.cpp
         Peripheral/USB/pyro_usb_descriptors.c
+        Peripheral/USB/pyro_usb_cdc_test.cpp # 临时测试
 
         # --- Algorithm ---
         Algorithm/Kinematics/pyro_kin_hybrid.cpp

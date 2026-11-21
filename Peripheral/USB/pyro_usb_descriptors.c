@@ -35,26 +35,53 @@ uint8_t const *tud_descriptor_device_cb(void) {
 }
 
 //--------------------------------------------------------------------+
-// Configuration Descriptor（单 CDC；FS-only，无需 HS / OTHER_SPEED）
+// 字符串描述符索引
 //--------------------------------------------------------------------+
+// 必须定义在配置描述符之前 —— TUD_CDC_DESCRIPTOR 的第 2 个参数就是接口字符串索引。
 enum {
-    ITF_NUM_CDC = 0,
-    ITF_NUM_CDC_DATA,
+    STRID_LANGID = 0,
+    STRID_MANUFACTURER,
+    STRID_PRODUCT,
+    STRID_SERIAL,
+    STRID_CDC0_ITF,
+    STRID_CDC1_ITF
+};
+
+//--------------------------------------------------------------------+
+// Configuration Descriptor（双 CDC；FS-only，无需 HS / OTHER_SPEED）
+//--------------------------------------------------------------------+
+// 每个 CDC 功能占 2 个接口（控制 + 数据）和 3 个端点（notify IN / data OUT / data IN）。
+// 接口号与端点号都必须唯一，否则主机枚举时报 "device descriptor request failed"
+// 或只认到第一个功能。
+//
+//   接口 0/1  ←→  serial_id 0     接口 2/3  ←→  serial_id 1
+//   EP 0x81/0x02/0x82              EP 0x83/0x04/0x84
+//
+// 端点预算：dwc2_stm32.h 的 EP_MAX_HS = 9（含 EP0）→ 可用 EP 号 1..8，
+//          每个 CDC 占 2 个 → 最多 4 个 CDC 口。
+enum {
+    ITF_NUM_CDC0 = 0,
+    ITF_NUM_CDC0_DATA,
+    ITF_NUM_CDC1,
+    ITF_NUM_CDC1_DATA,
     ITF_NUM_TOTAL
 };
 
-#define EPNUM_CDC_NOTIF   0x81
-#define EPNUM_CDC_OUT     0x02
-#define EPNUM_CDC_IN      0x82
+#define EPNUM_CDC0_NOTIF  0x81
+#define EPNUM_CDC0_OUT    0x02
+#define EPNUM_CDC0_IN     0x82
+#define EPNUM_CDC1_NOTIF  0x83
+#define EPNUM_CDC1_OUT    0x04
+#define EPNUM_CDC1_IN     0x84
 
-#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN)
+#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN * 2)
 
 static uint8_t const desc_fs_configuration[] = {
     // Config number, interface count, string index, total length, attribute, power(mA)
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
     // Interface number, string index, EP notif addr & size, EP out, EP in, EP size
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 4, EPNUM_CDC_NOTIF, 8,
-                       EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC0, 4, EPNUM_CDC0_NOTIF, 8, EPNUM_CDC0_OUT, EPNUM_CDC0_IN, 64),
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC1, 5, EPNUM_CDC1_NOTIF, 8, EPNUM_CDC1_OUT, EPNUM_CDC1_IN, 64),
 };
 
 // Invoked when received GET CONFIGURATION DESCRIPTOR
@@ -63,17 +90,6 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     return desc_fs_configuration;
 }
 
-//--------------------------------------------------------------------+
-// String Descriptors
-//--------------------------------------------------------------------+
-enum {
-    STRID_LANGID = 0,
-    STRID_MANUFACTURER,
-    STRID_PRODUCT,
-    STRID_SERIAL,
-    STRID_CDC_ITF
-};
-
 /* 注意：数组本身可写 —— 序列号（index 3）由应用层经 pyro_usb_desc_set_serial() 注入；
  *       其余各项均为编译期常量，且厂商/产品名**不得含机型字样**。 */
 static char const *string_desc_arr[] = {
@@ -81,7 +97,8 @@ static char const *string_desc_arr[] = {
     PYRO_USB_MANUFACTURER_STR,       // 1: Manufacturer
     PYRO_USB_PRODUCT_STR,            // 2: Product
     "PYRO",                          // 3: Serial（占位值；实际值由应用层经 set_serial 注入）
-    PYRO_USB_CDC_ITF_STR,            // 4: CDC interface
+    PYRO_USB_CDC_ITF_STR,            // 4: CDC0UD interface
+    PYRO_USB_CDC_ITF1_STR            // 5: CDC1 interface
 };
 
 /* 注入序列号（时序要求见 pyro_usb_desc_config.h；此处只做最小防御） */

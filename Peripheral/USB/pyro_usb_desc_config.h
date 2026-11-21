@@ -12,7 +12,8 @@
 /* 厂商 / 产品 / CDC 接口字符串（项目级常量，不含机型） */
 #define PYRO_USB_MANUFACTURER_STR "PYRo"
 #define PYRO_USB_PRODUCT_STR      "PYRo Robot Virtual COM"
-#define PYRO_USB_CDC_ITF_STR      "PYRo CDC"
+#define PYRO_USB_CDC_ITF_STR      "PYRo CDC 0"
+#define PYRO_USB_CDC_ITF1_STR      "PYRo CDC 1"
 
 /* USB 字符串描述符上限：本项目 _desc_str[32+1] → 31 个字符 */
 #define PYRO_USB_SERIAL_MAX_LEN 31
