@@ -35,6 +35,8 @@ target_sources(PYRo PRIVATE
         Peripheral/DWT/pyro_dwt_drv.cpp
         Peripheral/UART/pyro_uart_drv.cpp
         Peripheral/UART/pyro_bsp_uart.cpp
+        Peripheral/USB/pyro_usb_cdc_drv.cpp
+        Peripheral/USB/pyro_usb_descriptors.c
 
         # --- Algorithm ---
         Algorithm/Kinematics/pyro_kin_hybrid.cpp
@@ -109,6 +111,8 @@ target_include_directories(PYRo PUBLIC
         Peripheral/CAN
         Peripheral/DWT
         Peripheral/UART
+        Peripheral/Serial
+        Peripheral/USB
 
         # --- Device ---
         Device/BMI088
@@ -150,4 +154,4 @@ target_include_directories(PYRo PUBLIC
 )
 
 
-target_link_libraries(PYRo PUBLIC stm32cubemx dsppp_lib)
+target_link_libraries(PYRo PUBLIC stm32cubemx dsppp_lib tinyusb)
