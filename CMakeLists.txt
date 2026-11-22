@@ -27,18 +27,19 @@ target_sources(PYRo PRIVATE
         Core/Task/pyro_task.cpp
         Core/Memory/pyro_core_dma_heap.c
         Core/Memory/pyro_core_mem.cpp
-        Core/Task/pyro_task.cpp
 
         # --- Peripheral ---
         Peripheral/CAN/pyro_can_drv.cpp
         Peripheral/CAN/pyro_bsp_can.cpp
         Peripheral/DWT/pyro_dwt_drv.cpp
+        Peripheral/SPI/pyro_spi_drv.cpp
+        Peripheral/SPI/pyro_bsp_spi.cpp
         Peripheral/UART/pyro_uart_drv.cpp
         Peripheral/UART/pyro_bsp_uart.cpp
-        Peripheral/USB/pyro_usb_cdc_drv.cpp
-        Peripheral/USB/pyro_usb_descriptors.c
 
         # --- Algorithm ---
+        Algorithm/Matrix/pyro_algo_matrix.cpp
+        Algorithm/VQF/pyro_algo_vqf_eskf.cpp
         Algorithm/Kinematics/pyro_kin_hybrid.cpp
         Algorithm/Kinematics/pyro_kin_mec.cpp
         Algorithm/Kinematics/pyro_kin_rudder.cpp
@@ -46,10 +47,8 @@ target_sources(PYRo PRIVATE
         Algorithm/OLS/pyro_algo_ols.cpp
         Algorithm/PID/pyro_algo_pid.cpp
         Algorithm/PD/pyro_algo_pd.cpp
-        Algorithm/EKF/QuaternionEKF.cpp
-        Algorithm/KF/kalman_filter.cpp
         Algorithm/Common/pyro_algo_common.cpp
-        Algorithm/CRC/PYRo_crc.cpp
+        Algorithm/CRC/pyro_crc.cpp
         Algorithm/Powercontrol/pyro_power_control.cpp
         Algorithm/Navigation/pyro_nav_hub.cpp
 
@@ -64,7 +63,10 @@ target_sources(PYRo PRIVATE
         Component/Referee/fifo.c
         Component/Referee/pyro_referee.cpp
         Component/Image/pyro_image_drv.cpp
+        Component/IMU/imu_base_drv.cpp
+        Component/IMU/BMI088/BMI088_driver.cpp
         Component/INS/pyro_ins.cpp
+        Component/INS/pyro_ins_attitude.cpp
         Component/Supercap/pyro_supercap_drv.cpp
         Component/SR/pyro_sonic_base_drv.cpp
         Component/SR/pyro_sr04_drv.cpp
@@ -78,7 +80,6 @@ target_sources(PYRo PRIVATE
         Debug/VOFA/pyro_vofa.cpp
 
         # --- Device ---
-        Device/BMI088/BMI088_driver.cpp
         Device/BMI088/BMI088_middleware.cpp
         Component/Referee/UI/pyro_ui_drv.cpp
 
@@ -88,9 +89,6 @@ target_sources(PYRo PRIVATE
 
         Device/WS2812/ws2812_driver.cpp
         Device/WS2812/ws2812_middleware.cpp
-
-
-
 )
 
 
@@ -110,9 +108,8 @@ target_include_directories(PYRo PUBLIC
         # --- Peripheral ---
         Peripheral/CAN
         Peripheral/DWT
+        Peripheral/SPI
         Peripheral/UART
-        Peripheral/Serial
-        Peripheral/USB
 
         # --- Device ---
         Device/BMI088
@@ -121,18 +118,21 @@ target_include_directories(PYRo PUBLIC
 
         # --- Algorithm ---
         Algorithm/Common
+        Algorithm/Matrix
         Algorithm/Kinematics
         Algorithm/OLS
         Algorithm/PID
         Algorithm/PD
-        Algorithm/EKF
         Algorithm/KF
+        Algorithm/Butterworth
+        Algorithm/VQF
         Algorithm/CRC
         Algorithm/Powercontrol
         Algorithm/Navigation
 
         # --- Component ---
         Component/IMU
+        Component/IMU/BMI088
         Component/INS
         Component/Motor
         Component/Powermeter
@@ -154,4 +154,18 @@ target_include_directories(PYRo PUBLIC
 )
 
 
-target_link_libraries(PYRo PUBLIC stm32cubemx dsppp_lib tinyusb)
+# VQF 及其在本文件实例化的滤波模板沿用 IMU_Module 的编译优化等级。
+set_source_files_properties(Algorithm/VQF/pyro_algo_vqf_eskf.cpp PROPERTIES COMPILE_OPTIONS "-O2")
+
+target_link_libraries(PYRo PUBLIC stm32cubemx dsppp_lib)
+
+if (TARGET tinyusb)
+    target_sources(PYRo PRIVATE
+            Peripheral/USB/pyro_usb_cdc_drv.cpp
+            Peripheral/USB/pyro_usb_descriptors.c
+    )
+    target_include_directories(PYRo PUBLIC
+            Peripheral/USB
+    )
+    target_link_libraries(PYRo PUBLIC tinyusb)
+endif ()

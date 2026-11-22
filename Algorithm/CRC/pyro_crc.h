@@ -8,6 +8,12 @@ extern "C" {
 #endif
 
 /**
+ * @brief 计算 CRC16，可传入上一次结果继续累计。首次调用使用 0xFFFF。
+ */
+extern uint16_t get_crc16_check_sum(uint8_t const* p_msg, uint16_t len,
+                                  uint16_t crc16);
+
+/**
  * @brief 校验 CRC16
  * @return 1 (true) if valid, 0 (false) if invalid
  */
