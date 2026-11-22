@@ -5,8 +5,6 @@
 //                               CRC16
 // ===================================================================
 
-static uint16_t get_crc16_check_sum(uint8_t const *p_msg, uint16_t len, uint16_t crc16);
-
 static uint16_t crc16_init = 0xffff;
 static const uint16_t crc16_tab[256] = {
     0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 0x8c48,
@@ -40,9 +38,9 @@ static const uint16_t crc16_tab[256] = {
     0x3de3, 0x2c6a, 0x1ef1, 0x0f78};
 
 /**
- * @brief Get the crc16 checksum (Internal)
+ * @brief Get the crc16 checksum, continuing from the supplied accumulator.
  */
-static uint16_t get_crc16_check_sum(uint8_t const *p_msg, uint16_t len, uint16_t crc16)
+uint16_t get_crc16_check_sum(uint8_t const *p_msg, uint16_t len, uint16_t crc16)
 {
     uint8_t data;
 

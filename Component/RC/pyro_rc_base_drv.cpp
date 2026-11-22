@@ -103,7 +103,7 @@ void rc_drv_t::task_run_loop()
         while (sequence >> _priority_bit & 0x01)
         {
             const size_t bytes = xMessageBufferReceive(
-                _rc_msg_buffer, _rx_buf, _frame_len, pdMS_TO_TICKS(100));
+                _rc_msg_buffer, _rx_buf, _frame_len, pdMS_TO_TICKS(1000));
             if (bytes == _frame_len)
             {
                 unpack(_rx_buf);
