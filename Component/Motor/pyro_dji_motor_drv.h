@@ -116,7 +116,7 @@ class dji_gm_6020_motor_drv_t : public dji_motor_drv_t
 
     dji_gm_6020_motor_drv_t(pyro::dji_motor_tx_frame_t::register_id_t id,
                             bsp_can::which_can which,
-                            control_mode_t mode);
+                            control_mode_t mode = CURRENT_MODE);
     ~dji_gm_6020_motor_drv_t()
     {
     }

@@ -53,6 +53,9 @@ struct virtual_rc_t
         // 其他可能带有复合逻辑的辅助按键
         buttons.fn_l.init(true, true, true);
         buttons.fn_r.init(true, true, true);
+#if defined(ROBOT_ID) && defined(INFANTRY1_ID) && ROBOT_ID == INFANTRY1_ID
+        buttons.pause.init(true, true, true);
+#endif
 
         // 键盘按键默认全开高级判定 (不用担心，订阅 PRESS_DOWN 依然是0延迟)
         keys.w.init(true, true, true);

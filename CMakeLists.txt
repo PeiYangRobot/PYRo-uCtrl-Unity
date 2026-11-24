@@ -157,6 +157,12 @@ target_include_directories(PYRo PUBLIC
 # VQF 及其在本文件实例化的滤波模板沿用 IMU_Module 的编译优化等级。
 set_source_files_properties(Algorithm/VQF/pyro_algo_vqf_eskf.cpp PROPERTIES COMPILE_OPTIONS "-O2")
 
+if (DEFINED ROBOT_ID AND DEFINED INFANTRY1_ID AND ROBOT_ID EQUAL INFANTRY1_ID)
+    target_compile_definitions(PYRo PRIVATE PYRO_INFANTRY1)
+    target_sources(PYRo PRIVATE Component/STP23L/pyro_stp23l_drv.cpp)
+    target_include_directories(PYRo PUBLIC Component/STP23L)
+endif ()
+
 target_link_libraries(PYRo PUBLIC stm32cubemx dsppp_lib)
 
 if (TARGET tinyusb)
