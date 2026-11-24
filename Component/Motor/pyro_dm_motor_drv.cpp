@@ -4,10 +4,6 @@
 
 #include "pyro_dm_motor_drv.h"
 
-#ifdef PYRO_INFANTRY1
-#include "pyro_dwt_drv.h"
-#endif
-
 namespace pyro
 {
 dm_motor_drv_t::dm_motor_drv_t(uint32_t can_id, uint32_t master_id,
@@ -17,10 +13,6 @@ dm_motor_drv_t::dm_motor_drv_t(uint32_t can_id, uint32_t master_id,
     _master_id     = master_id;
     _can_id        = can_id;
     _feedback_msg = new can_msg_buffer_t(_master_id);
-#ifdef PYRO_INFANTRY1
-    _online = false;
-    _last_update_time = -1.0f;
-#endif
     if (_can_drv)
     {
         _can_drv->register_rx_msg(_feedback_msg);
@@ -82,25 +74,8 @@ static float uint_to_float(int x_int, float x_min, float x_max, int bits)
 status_t pyro::dm_motor_drv_t::update_feedback()
 {
     std::array<uint8_t, 8> data;
-#ifdef PYRO_INFANTRY1
-    taskENTER_CRITICAL();
-    const bool fresh = _feedback_msg->get_data(data);
-    if (fresh)
-        _feedback_msg->mark_read();
-    taskEXIT_CRITICAL();
-
-    const float now = dwt_drv_t::get_timeline_s();
-    if (!fresh)
-    {
-        _online = _last_update_time >= 0.0f && now - _last_update_time < 1.0f;
-        return PYRO_ERROR;
-    }
-    _last_update_time = now;
-    _online = true;
-#else
     if (!_feedback_msg->get_data(data))
         return PYRO_ERROR;
-#endif
     _error_code = static_cast<error_code>(((data[0]>>4)&0x0f));
     switch(_error_code)
     {
