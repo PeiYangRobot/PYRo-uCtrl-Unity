@@ -72,6 +72,7 @@ target_sources(PYRo PRIVATE
         Component/SR/pyro_sr04_drv.cpp
         Component/SR/pyro_sr05_drv.cpp
         Component/SR/pyro_us100_drv.cpp
+        Component/STP23L/pyro_stp23l_drv.cpp
         Component/warning/pyro_warning_drv.cpp
 
         # --- Debug ---
@@ -142,6 +143,7 @@ target_include_directories(PYRo PUBLIC
         Component/Shoot
         Component/Supercap
         Component/SR
+        Component/STP23L
         Component/Image
         Component/warning
 
