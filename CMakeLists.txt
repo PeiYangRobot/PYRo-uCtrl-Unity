@@ -159,6 +159,18 @@ set_source_files_properties(Algorithm/VQF/pyro_algo_vqf_eskf.cpp PROPERTIES COMP
 
 target_link_libraries(PYRo PUBLIC stm32cubemx dsppp_lib)
 
+if (TARGET SEGGER_RTT)
+    target_sources(PYRo PRIVATE
+            Debug/EDT/edt_rtt.c
+            Debug/EDT/edt_scope.c
+            Debug/EDT/pyro_edt_task.cpp
+    )
+    target_include_directories(PYRo PUBLIC
+            Debug/EDT
+    )
+    target_link_libraries(PYRo PUBLIC SEGGER_RTT)
+endif ()
+
 if (TARGET tinyusb)
     target_sources(PYRo PRIVATE
             Peripheral/USB/pyro_usb_cdc_drv.cpp
