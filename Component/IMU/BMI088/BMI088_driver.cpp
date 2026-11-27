@@ -447,7 +447,7 @@ bool gyro_odr_code(uint16_t hz, uint8_t &code)
         case 200U:  code = BMI088::GYRO_200_23_HZ;    return true;
         case 400U:  code = BMI088::GYRO_400_47_HZ;    return true;
         case 1000U: code = BMI088::GYRO_1000_116_HZ;  return true;
-        case 2000U: code = BMI088::GYRO_2000_532_HZ;  return true;
+        case 2000U: code = BMI088::GYRO_2000_230_HZ;  return true;
         default: return false;
     }
 }
